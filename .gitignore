@@ -1,0 +1,6 @@
+.venv/           # ignore the virtual environment folder (local Python setup)
+__pycache__/     # ignore Python cache files generated when code runs
+instance/        # ignore the instance folder (will hold your SQLite db, secrets)
+*.sqlite3        # ignore any stray SQLite database files
+.env             # ignore your secrets file (environment variables)
+.DS_Store        # ignore macOS Finder metadata files

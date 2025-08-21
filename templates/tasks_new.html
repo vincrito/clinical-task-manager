@@ -1,0 +1,41 @@
+{% extends "layout.html" %}                                                     <!-- base layout -->
+
+{% block content %}
+<h2 class="mb-3">New Task</h2>                                                  <!-- title -->
+
+<form method="post" action="{{ url_for('tasks.create_task') }}" class="row g-3" autocomplete="off"> <!-- POST to create task -->
+  <div class="col-md-8">
+    <label class="form-label">Description</label>                                <!-- description label -->
+    <input name="description" class="form-control" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">                     <!-- description input -->
+  </div>
+
+  <div class="col-md-4">                                                                 <!-- column wrapper -->
+  <label class="form-label">Due date</label>                                           <!-- field label -->
+  <input name="due_date" type="date" class="form-control" autocomplete="off">                             <!-- native date picker (calendar); submits YYYY-MM-DD -->
+  <!--<div class="form-text">You can also type MM/DD/YY.</div>                              helper hint -->
+</div>
+
+
+  <div class="col-md-6">
+    <label class="form-label">Patient</label>                                    <!-- patient label -->
+    <select name="patient_id" class="form-select" required>                      <!-- patient dropdown -->
+      <option value="">— Select patient —</option>                               <!-- placeholder option -->
+      {% for p in patients %}                                                    <!-- loop over patients -->
+        <option value="{{ p.id }}" {{ 'selected' if pre_pid|int == p.id else '' }}>       <!-- select if matches ?patient_id= -->
+          {{ (p.last_name or '') ~ (', ' ~ p.first_name if p.first_name) }}               <!-- show LAST, First -->
+          {% if p.mrn %} (MRN {{ p.mrn }}){% endif %}                                     <!-- append MRN if present -->
+        </option>
+
+      {% endfor %}
+    </select>
+    <div class="form-text">
+      Missing someone? <a href="{{ url_for('patients.new_patient') }}">Add patient</a>. <!-- helper link -->
+    </div>
+  </div>
+
+  <div class="col-12">
+    <button class="btn btn-primary">Create</button>                              <!-- submit -->
+    <a class="btn btn-link" href="{{ url_for('tasks.list_tasks') }}">Cancel</a>  <!-- cancel -->
+  </div>
+</form>
+{% endblock %}

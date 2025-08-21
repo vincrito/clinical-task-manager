@@ -1,0 +1,28 @@
+{% extends "layout.html" %}                                                                <!-- base layout -->
+
+{% block content %}
+<h2 class="mb-3">Edit Patient</h2>                                                         <!-- title -->
+
+<form method="post" action="{{ url_for('patients.update_patient', pid=patient.id) }}" class="row g-3" autocomplete="off"> <!-- POST to save -->
+  <div class="col-md-4">
+    <label class="form-label">Last name</label>                                            <!-- last name label -->
+    <input name="last_name" class="form-control" value="{{ patient.last_name or '' }}" autocomplete="off">    <!-- last name input -->
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">First name</label>                                           <!-- first name label -->
+    <input name="first_name" class="form-control" value="{{ patient.first_name or '' }}" autocomplete="off">  <!-- first name input -->
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">MRN (optional)</label>                                       <!-- MRN label -->
+    <input name="mrn" class="form-control" value="{{ patient.mrn or '' }}" autocomplete="off">                <!-- MRN input -->
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">DOB (YYYY-MM-DD, optional)</label>                           <!-- DOB label -->
+    <input name="dob" class="form-control" placeholder="YYYY-MM-DD" value="{{ patient.dob or '' }}"> <!-- DOB input -->
+  </div>
+  <div class="col-12">
+    <button class="btn btn-primary">Save</button>                                          <!-- submit -->
+    <a class="btn btn-link" href="{{ url_for('patients.patient_detail', pid=patient.id) }}">Cancel</a> <!-- cancel -->
+  </div>
+</form>
+{% endblock %}

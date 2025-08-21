@@ -1,0 +1,102 @@
+{% extends "layout.html" %}                                                     <!-- base layout -->
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">           <!-- header row -->
+  <h2 class="mb-0">Tasks</h2>                                                  <!-- title -->
+  <a class="btn btn-primary" href="{{ url_for('tasks.new_task') }}">New</a>   <!-- go to / tasks/new -->
+</div>
+
+<form class="row g-2 mb-3" method="get" action="{{ url_for('tasks.list_tasks') }}"> <!-- filter/search bar -->
+  <div class="col-auto">
+    <select name="status" class="form-select">                                  <!-- status filter -->
+      <option value="">All statuses</option>                                    <!-- no filter -->
+      <option value="pending" {{ 'selected' if status=='pending' else '' }}>Pending</option>        <!-- pending -->
+      <option value="in_progress" {{ 'selected' if status=='in_progress' else '' }}>In progress</option> <!-- in progress -->
+      <option value="completed" {{ 'selected' if status=='completed' else '' }}>Completed</option>  <!-- completed -->
+    </select>
+  </div>
+  <div class="col-auto">
+    <input class="form-control" name="patient_id" placeholder="Patient ID" value="{{ patient_id or '' }}"> <!-- filter by patient -->
+  </div>
+  <div class="col-auto">
+    <input class="form-control" name="q" placeholder="Search description" value="{{ q or '' }}"> <!-- text search -->
+  </div>
+  <div class="col-auto">
+    <button class="btn btn-outline-secondary">Apply</button>                    <!-- submit filters -->
+  </div>
+</form>
+
+<table class="table table-sm align-middle">                                       <!-- tasks table -->
+  <thead>
+    <tr>
+      <th>Patient</th><th>Description</th><th>Due</th><th>Status</th><th>Set</th><th>Comments</th> <!-- headers -->
+    </tr>
+  </thead>
+  <tbody>
+    {% for t in tasks %}
+      <tr class="
+        {% if t.status == 'completed' %}table-success
+        {% elif t.status == 'in_progress' %}table-warning
+        {% else %}table-danger{% endif %}
+      ">
+        <td class="text-nowrap">  <!-- patient cell (now clickable) -->
+          <a href="{{ url_for('patients.patient_detail', pid=t.patient_id) }}">  <!-- link to /patients/<id> -->
+            {{ patients.get(t.patient_id, 'Unknown') }}                           <!-- show label "LAST, First (MRN)" -->
+          </a>                                                                     <!-- end link -->
+        </td>                                                                      <!-- end cell -->
+
+        <td>{{ t.description }}</td>                                                <!-- task text -->
+        <td class="text-nowrap">{{ (t.due_date | mdy) if t.due_date else '' }}</td>   <!-- show as MM/DD/YY -->
+        <td class="text-nowrap">{{ t.status | statuslabel }}</td>                                 <!-- current status -->
+        <td class="text-end text-nowrap">                                                  <!-- action buttons cell -->
+          <a class="btn btn-sm btn-outline-primary"
+            href="{{ url_for('tasks.edit_task', tid=t.id) }}">Edit</a> 
+          <form method="post" action="{{ url_for('tasks.set_status', tid=t.id) }}" style="display:inline"> <!-- pending -->
+           <input type="hidden" name="status" value="pending">                            <!-- send 'pending' -->
+           <button class="btn btn-sm btn-outline-danger">Pending</button>                 <!-- red outline -->
+          </form>
+          <form method="post" action="{{ url_for('tasks.set_status', tid=t.id) }}" style="display:inline"> <!-- in_progress -->
+           <input type="hidden" name="status" value="in_progress">                        <!-- send 'in_progress' -->
+           <button class="btn btn-sm btn-outline-warning">In&nbsp;Progress</button>       <!-- orange outline -->
+          </form>
+          <form method="post" action="{{ url_for('tasks.set_status', tid=t.id) }}" style="display:inline"> <!-- completed -->
+           <input type="hidden" name="status" value="completed">                          <!-- send 'completed' -->
+           <button class="btn btn-sm btn-outline-success">Done</button>                   <!-- green outline -->
+          </form>
+          <form method="post" action="{{ url_for('tasks.delete_task', tid=t.id) }}" style="display:inline"  
+              onsubmit="return confirm('Delete this task?');">                            <!-- simple safety confirm -->
+           <button class="btn btn-sm btn-outline-secondary">Delete</button>               <!-- delete button -->
+          </form>
+        </td>
+
+        <td style="min-width: 260px;">                                               <!-- comments cell -->
+          <form method="post" action="{{ url_for('tasks.add_comment', tid=t.id) }}" class="d-flex gap-2 mb-2" autocomplete="off">  <!-- no autofill -->
+            <input id="comment-{{ t.id }}" name="body" class="form-control form-control-sm"
+                   placeholder="Add comment"
+                    autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">  <!-- no suggestions -->
+            <button class="btn btn-sm btn-secondary">Add</button>
+          </form>
+
+          <ul class="list-unstyled small mb-0">                                      <!-- comments list -->
+            {% for c in comments_by_task.get(t.id, []) %}
+              <li class="mb-1">
+                <strong>{{ current_user.username }}</strong>: {{ c.body }}  <!-- show the logged-in username -->
+                <small class="text-muted">
+                  {{ c.created_at.strftime("%m/%d/%y %I:%M%p") }}
+                </small>
+              
+              </li>
+            {% else %}
+              <li class="text-muted">No comments</li>
+            {% endfor %}
+          </ul>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="text-muted">No tasks yet.</td></tr>                <!-- empty state -->
+    {% endfor %}
+  </tbody>
+</table>
+
+
+{% endblock %}
