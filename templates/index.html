@@ -1,15 +1,24 @@
 {% extends "layout.html" %}         <!-- use layout.html as the base -->
 
 {% block content %}                 <!-- fill in the content block -->
-  <div class="p-4 bg-light rounded-3">
-    <h1 class="display-6 mb-3">Clinical Task Manager</h1>
-    <p class="mb-3">
-      Skeleton is running. Next steps: add users, patients, tasks, and comments.
+  <div style="max-width:700px; margin:60px auto; text-align:left; font-family:sans-serif; line-height:1.6;">
+    <h1 style="font-size:2.2em; font-weight:600; margin-bottom:0.5em; color:#2c3e50;">
+        Clinical Task Manager
+    </h1>
+    <p style="font-size:1.1em; color:#444;">
+        Welcome! This is your central hub to manage patients and their tasks.
+        Each patient has a dedicated space, and every task is tracked clearly.
     </p>
-    <ul class="mb-0">
-      <li>Tasks will link to patients</li>
-      <li>Status colors: pending red, in progress orange, completed green</li>
-      <li>Authentication coming next</li>
-    </ul>
-  </div>
+    <p style="font-size:1.1em; color:#444;">
+        Status is color-coded for clarity:
+        <span style="color:#e74c3c;">Pending</span>,
+        <span style="color:#e67e22;">In Progress</span>,
+        <span style="color:#27ae60;">Completed</span>.
+    </p>
+    <p style="margin-top:1em; font-size:1em; font-style:italic; color:#666;">
+        A simple system to keep everything moving forward without a hitch.
+    </p>
+</div>
+
+
 {% endblock %}
