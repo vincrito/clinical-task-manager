@@ -38,10 +38,11 @@ def create_app():
     instance_db_path = os.path.join(app.instance_path, "app.db")
     # build ABSOLUTE path to instance/app.db (prevents sqlite open errors)
 
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
-        "DATABASE_URL", f"sqlite:///{instance_db_path}"
-    )
-    # use DATABASE_URL if set; otherwise default to SQLite in instance/
+    db_url = os.getenv("DATABASE_URL", f"sqlite:///{instance_db_path}")
+    # Render provides postgres:// but SQLAlchemy 2.x requires postgresql://
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+    app.config["SQLALCHEMY_DATABASE_URI"] = db_url
 
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     # turn off unneeded SQLAlchemy event system
@@ -57,25 +58,49 @@ def create_app():
     from routes.auth import bp as auth_bp                # import the auth blueprint (defined next)
     app.register_blueprint(auth_bp, url_prefix="/auth")  # register under /auth (so /auth/login, /auth/register)
 
-    from routes.patients import bp as patients_bp 
-    app.register_blueprint(patients_bp)
+    from routes.lists import bp as lists_bp
+    app.register_blueprint(lists_bp)
     
-    from routes.tasks import bp as tasks_bp                      # import tasks blueprint                         # import
-    app.register_blueprint(tasks_bp)                             # register routes at /tasks                      # register
+    from routes.tasks import bp as tasks_bp
+    app.register_blueprint(tasks_bp)
+
+    from routes.articles import bp as articles_bp
+    app.register_blueprint(articles_bp)
 
     from models.user import User
-    from models.patient import Patient
+    from models.list import TaskList
     from models.task import Task
-    from models.comment import Comment             # import Comment so its table can be created        # register model
+    from models.comment import Comment
+    from models.article import Article, ArticleReaction
 
     @login_manager.user_loader
     def load_user(user_id: str):
-        return User.query.get(int(user_id))              # how Flask-Login loads a user from session id
+        return User.query.get(int(user_id))
 
-    return app                                           # return configured app
+    @app.context_processor
+    def inject_navbar_stats():
+        from flask_login import current_user
+        from sqlalchemy import func
+        if not current_user.is_authenticated:
+            return {"navbar_stats": None}
+        rows = (
+            db.session.query(Task.status, func.count(Task.id))
+            .filter(Task.user_id == current_user.id)
+            .group_by(Task.status)
+            .all()
+        )
+        s = {"pending": 0, "in_progress": 0, "completed": 0}
+        for status, cnt in rows:
+            if status in s:
+                s[status] = cnt
+        return {"navbar_stats": s}
+
+    return app
 
 if __name__ == "__main__":
-    app = create_app()                                   # build the app
-    with app.app_context():                              # open an application context
-        db.create_all()                                  # create tables if not present
+    app = create_app()
+    with app.app_context():
+        db.create_all()
+        from seeds import seed_articles
+        seed_articles(db)
     app.run(host="127.0.0.1", port=8000, debug=True)     # run on port 8000

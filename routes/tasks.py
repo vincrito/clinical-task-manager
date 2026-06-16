@@ -1,49 +1,197 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash   # templates, forms, redirects, alerts
-from flask_login import login_required, current_user                              # route protection and current user info
-from models import db                                                             # database session for commits
-from models.task import Task, ALLOWED_STATUSES                                    # Task model and allowed status values
-from models.patient import Patient                                                # Patient model (for dropdowns/labels)
-from models.comment import Comment                                                # Comment model (to read/write comments)            # import
-from sqlalchemy import or_                                                        # optional SQL helper (not strictly needed)        # import
-import re                                                                       # regular expressions for simple date validation  # import re
-from datetime import datetime, date                                                   # robust date parsing/formatting
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask_login import login_required, current_user
+from models import db
+from models.task import Task, ALLOWED_STATUSES, ALLOWED_PRIORITIES
+from models.list import TaskList
+from models.comment import Comment
+from sqlalchemy import or_
+import re
+from datetime import datetime, date
 
-bp = Blueprint("tasks", __name__)                                                 # define the "tasks" blueprint
+bp = Blueprint("tasks", __name__)
 
-@bp.get("/tasks")                                                            # GET /tasks shows list                           # route
-@login_required                                                              # must be logged in                               # guard
+@bp.post("/tasks/quick-add")
+@login_required
+def quick_add():
+    """JSON endpoint used by the dashboard quick-add modal."""
+    description = request.form.get("description", "").strip()
+    due_date_raw = request.form.get("due_date", "").strip()
+    list_id = request.form.get("list_id", "").strip()
+    priority = request.form.get("priority", "medium").strip()
+
+    if not description:
+        return jsonify(ok=False, error="Description is required.")
+    if not list_id.isdigit():
+        return jsonify(ok=False, error="Invalid list.")
+    lst = TaskList.query.filter_by(id=int(list_id), user_id=current_user.id).first()
+    if not lst:
+        return jsonify(ok=False, error="List not found.")
+    if priority not in ALLOWED_PRIORITIES:
+        priority = "medium"
+
+    due_date = None
+    if due_date_raw:
+        parsed = None
+        for fmt in ("%Y-%m-%d", "%m/%d/%y", "%m/%d/%Y"):
+            try:
+                parsed = datetime.strptime(due_date_raw, fmt)
+                break
+            except ValueError:
+                pass
+        if not parsed:
+            return jsonify(ok=False, error="Invalid due date format.")
+        if parsed.date() < date.today():
+            return jsonify(ok=False, error="Due date cannot be in the past.")
+        due_date = parsed.strftime("%Y-%m-%d")
+
+    t = Task(user_id=current_user.id, list_id=lst.id,
+             description=description, due_date=due_date,
+             status="pending", priority=priority)
+    db.session.add(t)
+    db.session.commit()
+    return jsonify(ok=True, task_id=t.id, list_id=lst.id,
+                   description=description, due_date=due_date or "",
+                   priority=priority)
+
+@bp.post("/tasks/<int:tid>/complete-json")
+@login_required
+def complete_json(tid: int):
+    t = Task.query.filter_by(id=tid, user_id=current_user.id).first()
+    if not t:
+        return jsonify(ok=False, error="Task not found.")
+    t.status = "completed"
+    db.session.commit()
+    return jsonify(ok=True, task_id=tid)
+
+@bp.get("/tasks/<int:tid>/json")
+@login_required
+def task_json(tid: int):
+    t = Task.query.filter_by(id=tid, user_id=current_user.id).first()
+    if not t:
+        return jsonify(ok=False, error="Not found.")
+    comments = (Comment.query
+                .filter_by(task_id=tid)
+                .order_by(Comment.created_at.asc())
+                .all())
+    lists = (TaskList.query
+             .filter_by(user_id=current_user.id)
+             .order_by(TaskList.name.asc())
+             .all())
+    return jsonify(
+        ok=True,
+        task={
+            "id": t.id,
+            "description": t.description,
+            "due_date": t.due_date or "",
+            "status": t.status,
+            "priority": t.priority,
+            "list_id": t.list_id,
+        },
+        comments=[{
+            "body": c.body,
+            "created_at": c.created_at.strftime("%m/%d/%y %I:%M%p") if c.created_at else "",
+        } for c in comments],
+        lists=[{"id": l.id, "name": l.name} for l in lists],
+    )
+
+@bp.post("/tasks/<int:tid>/update-json")
+@login_required
+def update_json(tid: int):
+    t = Task.query.filter_by(id=tid, user_id=current_user.id).first()
+    if not t:
+        return jsonify(ok=False, error="Not found.")
+    description = request.form.get("description", "").strip()
+    due_date_raw = request.form.get("due_date", "").strip()
+    list_id = request.form.get("list_id", "").strip()
+    status = request.form.get("status", "").strip()
+    priority = request.form.get("priority", "medium").strip()
+    if not description:
+        return jsonify(ok=False, error="Description is required.")
+    if status not in ALLOWED_STATUSES:
+        status = t.status
+    if priority not in ALLOWED_PRIORITIES:
+        priority = t.priority
+    due_date = None
+    if due_date_raw:
+        for fmt in ("%Y-%m-%d", "%m/%d/%y", "%m/%d/%Y"):
+            try:
+                due_date = datetime.strptime(due_date_raw, fmt).strftime("%Y-%m-%d")
+                break
+            except ValueError:
+                pass
+    if list_id.isdigit():
+        lst = TaskList.query.filter_by(id=int(list_id), user_id=current_user.id).first()
+        if lst:
+            t.list_id = lst.id
+    t.description = description
+    t.due_date = due_date
+    t.status = status
+    t.priority = priority
+    db.session.commit()
+    return jsonify(ok=True)
+
+@bp.post("/tasks/<int:tid>/comment-json")
+@login_required
+def comment_json(tid: int):
+    t = Task.query.filter_by(id=tid, user_id=current_user.id).first()
+    if not t:
+        return jsonify(ok=False, error="Not found.")
+    body = request.form.get("body", "").strip()
+    if not body:
+        return jsonify(ok=False, error="Comment cannot be empty.")
+    c = Comment(task_id=tid, user_id=current_user.id, body=body)
+    db.session.add(c)
+    db.session.commit()
+    return jsonify(ok=True, comment={
+        "body": c.body,
+        "created_at": c.created_at.strftime("%m/%d/%y %I:%M%p") if c.created_at else "",
+    })
+
+@bp.get("/tasks")
+@login_required
 def list_tasks():
-    status = request.args.get("status", "").strip()                          # optional ?status=                               # read
-    q = request.args.get("q", "").strip()                                    # optional ?q=                                    # read
-    patient_id = request.args.get("patient_id", "").strip()                  # optional ?patient_id=                           # read
+    status = request.args.get("status", "").strip()
+    q = request.args.get("q", "").strip()
+    list_id = request.args.get("list_id", "").strip()
+    priority = request.args.get("priority", "").strip()
 
-    query = Task.query.filter_by(user_id=current_user.id)                    # only my tasks                                   # base
+    query = Task.query.filter_by(user_id=current_user.id)
 
-    if status and status in ALLOWED_STATUSES:                                # validate status filter                           # check
-        query = query.filter(Task.status == status)                          # apply                                           # filter
+    if status and status in ALLOWED_STATUSES:
+        query = query.filter(Task.status == status)
 
-    if patient_id.isdigit():                                                 # numeric patient id?                             # check
-        query = query.filter(Task.patient_id == int(patient_id))             # apply                                           # filter
+    if priority and priority in ALLOWED_PRIORITIES:
+        query = query.filter(Task.priority == priority)
+
+    if list_id.isdigit():
+        query = query.filter(Task.list_id == int(list_id))
 
     if q:                                                                    # text search provided?                            # check
         like = f"%{q}%"                                                      # SQL LIKE pattern                                 # pattern
         query = query.filter(Task.description.ilike(like))                   # search description                               # filter
 
-    rows = (query.order_by(                                                  # build ordering                                    # order
-                Task.due_date.asc().nulls_last(),                            # earliest due first                                # order
-                Task.created_at.desc())                                      # then newest created                               # tie-break
-            .all())                                                          # run                                               # exec
+    from sqlalchemy import case as _sa_case
+    _pri = _sa_case(
+        (Task.priority == "high", 1),
+        (Task.priority == "medium", 2),
+        else_=3
+    )
+    rows = (query.order_by(
+                Task.due_date.asc().nulls_last(),
+                _pri,
+                Task.list_id)
+            .all())
 
-    # map patient_id -> label for display
-    patient_ids = {t.patient_id for t in rows}                               # collect unique patient ids                        # set
-    patients = {}                                                            # id -> label map                                   # dict
-    if patient_ids:                                                          # only query if needed                              # guard
-        plist = (Patient.query
-                 .filter(Patient.id.in_(patient_ids),
-                         Patient.user_id == current_user.id)
+    # map list_id -> label for display
+    list_ids = {t.list_id for t in rows}
+    lists = {}
+    if list_ids:
+        llist = (TaskList.query
+                 .filter(TaskList.id.in_(list_ids),
+                         TaskList.user_id == current_user.id)
                  .all())
-        for p in plist:
-            patients[p.id] = p.display_label()
+        for l in llist:
+            lists[l.id] = l.display_label()
 
     # load comments for all listed tasks in one query and group them
     task_ids = [t.id for t in rows]                                          # collect task ids                                  # list
@@ -56,22 +204,35 @@ def list_tasks():
         for c in all_comments:                                               # group comments by task id                          # loop
             comments_by_task[c.task_id].append(c)
 
-    return render_template("tasks_list.html",                                 # render template                                    # render
-                           tasks=rows,                                        # pass tasks                                          # ctx
-                           patients=patients,                                 # pass patient labels                                 # ctx
-                           comments_by_task=comments_by_task,                 # pass grouped comments                               # ctx
-                           status=status, q=q, patient_id=patient_id)         # echo filters                                        # ctx
+    all_user_lists = (TaskList.query
+                      .filter_by(user_id=current_user.id)
+                      .order_by(TaskList.name.asc())
+                      .all())
+    list_colors = {l.id: l.color for l in all_user_lists}
+
+    comment_counts = {tid: len(cs) for tid, cs in comments_by_task.items()}
+    comment_latest = {tid: cs[0].body if cs else "" for tid, cs in comments_by_task.items()}
+
+    return render_template("tasks_list.html",
+                           tasks=rows,
+                           lists=lists,
+                           all_user_lists=all_user_lists,
+                           list_colors=list_colors,
+                           comment_counts=comment_counts,
+                           comment_latest=comment_latest,
+                           status=status, q=q, list_id=list_id,
+                           priority=priority)
 
 
 @bp.get("/tasks/new")                                                             # show the new task form                                                  # route
 @login_required                                                                     # must be logged in                                                       # guard
 def new_task():
-    pre_pid = request.args.get("patient_id", "").strip()                           # optional ?patient_id= to preselect                                      # read
-    patients = (Patient.query                                                      # query my patients for dropdown                                         # query
-                .filter_by(user_id=current_user.id)                                # only my roster                                                          # scope
-                .order_by(Patient.last_name.asc(), Patient.first_name.asc())       # sort by name                                                            # order
-                .all())                                                            # run query                                                               # exec
-    return render_template("tasks_new.html", patients=patients, pre_pid=pre_pid)   # render form + pass preselected id (if any)                              # render
+    pre_lid = request.args.get("list_id", "").strip()
+    lists = (TaskList.query
+             .filter_by(user_id=current_user.id)
+             .order_by(TaskList.name.asc())
+             .all())
+    return render_template("tasks_new.html", lists=lists, pre_lid=pre_lid)
 
 
 @bp.post("/tasks/new")                                                            # POST /tasks/new handles creation
@@ -100,50 +261,60 @@ def create_task():
 
         due_date = parsed.strftime("%Y-%m-%d")                                  # store normalized ISO for DB/sorting
 
-    patient_id = request.form.get("patient_id", "").strip()                       # chosen patient id
+    list_id = request.form.get("list_id", "").strip()
 
-    if not description:                                                           # validate required description
-        flash("Description is required.", "danger")                               # show error
-        return redirect(url_for("tasks.new_task"))                                # back to form
+    if not description:
+        flash("Description is required.", "danger")
+        return redirect(url_for("tasks.new_task"))
 
-    if not patient_id.isdigit():                                                  # validate a numeric patient id
-        flash("Select a valid patient.", "danger")                                # show error
-        return redirect(url_for("tasks.new_task"))                                # back to form
+    if not list_id.isdigit():
+        flash("Select a valid list.", "danger")
+        return redirect(url_for("tasks.new_task"))
 
-    patient = (Patient.query
-               .filter_by(id=int(patient_id), user_id=current_user.id)            # enforce ownership
-               .first())
-    if not patient:                                                               # if not found / not owned
-        flash("Patient not found.", "danger")                                     # show error
-        return redirect(url_for("tasks.new_task"))                                # back to form
+    lst = (TaskList.query
+           .filter_by(id=int(list_id), user_id=current_user.id)
+           .first())
+    if not lst:
+        flash("List not found.", "danger")
+        return redirect(url_for("tasks.new_task"))
 
-    t = Task(user_id=current_user.id,                                             # create a new Task row
-             patient_id=patient.id,                                               # link to the selected patient
-             description=description,                                             # set description
-             due_date=due_date,                                                   # must provide due date
-             status="pending")                                                    # default status
+    priority = request.form.get("priority", "medium").strip()
+    if priority not in ALLOWED_PRIORITIES:
+        priority = "medium"
+
+    t = Task(user_id=current_user.id,
+             list_id=lst.id,
+             description=description,
+             due_date=due_date,
+             status="pending",
+             priority=priority)
     db.session.add(t)                                                             # stage the insert
     db.session.commit()                                                           # commit to DB
     flash("Task created.", "success")                                             # success message
+    redirect_to = request.form.get("redirect_to", "").strip()
+    if redirect_to and redirect_to.startswith("/") and not redirect_to.startswith("//"):
+        return redirect(redirect_to)
     return redirect(url_for("tasks.list_tasks"))                                  # go back to the list
 
-@bp.post("/tasks/<int:tid>/status")                                  # handle POST /tasks/<id>/status to change status       # route
-@login_required                                                       # only logged-in users can do this                      # guard
+@bp.post("/tasks/<int:tid>/status")
+@login_required
 def set_status(tid: int):
-    new_status = request.form.get("status", "").strip()              # read the requested status from the form               # read form
-    if new_status not in ALLOWED_STATUSES:                           # validate against allowed statuses                     # validate
-        flash("Bad status.", "danger")                               # show error if invalid                                 # alert
-        return redirect(url_for("tasks.list_tasks"))                 # return to the tasks list                              # redirect
-
-    t = Task.query.filter_by(id=tid, user_id=current_user.id).first()# fetch the task, enforcing ownership                   # query
-    if not t:                                                        # if no such task or not owned                          # check
-        flash("Task not found.", "danger")                           # show error                                            # alert
-        return redirect(url_for("tasks.list_tasks"))                 # back to list                                          # redirect
-
-    t.status = new_status                                            # set the new status                                    # update
-    db.session.commit()                                              # persist to database                                   # commit
-    flash("Status updated.", "success")                              # success message                                       # alert
-    return redirect(url_for("tasks.list_tasks"))                     # back to list                                          # redirect
+    new_status = request.form.get("status", "").strip()
+    if new_status not in ALLOWED_STATUSES:
+        flash("Bad status.", "danger")
+        return redirect(url_for("tasks.list_tasks"))
+    t = Task.query.filter_by(id=tid, user_id=current_user.id).first()
+    if not t:
+        flash("Task not found.", "danger")
+        return redirect(url_for("tasks.list_tasks"))
+    t.status = new_status
+    db.session.commit()
+    flash("Status updated.", "success")
+    # honour redirect_to for list detail page
+    redirect_to = request.form.get("redirect_to", "").strip()
+    if redirect_to and redirect_to.startswith("/") and not redirect_to.startswith("//"):
+        return redirect(redirect_to)
+    return redirect(url_for("tasks.list_tasks"))
 
 @bp.post("/tasks/<int:tid>/comments")                                       # handle adding a comment to a task                    # route
 @login_required                                                              # must be logged in                                    # guard
@@ -172,12 +343,13 @@ def delete_task(tid: int):
         flash("Task not found.", "danger")
         return redirect(url_for("tasks.list_tasks"))
 
-    # remove all comments tied to this task to avoid orphaned comments and ID reuse issues
-    Comment.query.filter_by(task_id=t.id, user_id=current_user.id).delete(synchronize_session=False)  # bulk delete comments
-    db.session.delete(t)                                                      # delete the task
-    db.session.commit()                                                       # commit both deletions
-
+    Comment.query.filter_by(task_id=t.id, user_id=current_user.id).delete(synchronize_session=False)
+    db.session.delete(t)
+    db.session.commit()
     flash("Task deleted.", "success")
+    redirect_to = request.form.get("redirect_to", "").strip()
+    if redirect_to and redirect_to.startswith("/") and not redirect_to.startswith("//"):
+        return redirect(redirect_to)
     return redirect(url_for("tasks.list_tasks"))
 
 from datetime import datetime                               # we’ll reuse for date parsing                                # import
@@ -189,11 +361,11 @@ def edit_task(tid: int):
     if not t:                                               # if task not found or not owned                              # check
         flash("Task not found.", "danger")                  # show error                                                  # alert
         return redirect(url_for("tasks.list_tasks"))        # back to list                                                # redirect
-    patients = (Patient.query                               # load patient choices for dropdown                           # query
-                .filter_by(user_id=current_user.id)         # only my roster                                              # scope
-                .order_by(Patient.last_name.asc(), Patient.first_name.asc())  # sort by name                               # order
-                .all())                                     # execute query                                               # exec
-    return render_template("tasks_edit.html", task=t, patients=patients)  # render edit form with current values           # render
+    lists = (TaskList.query
+             .filter_by(user_id=current_user.id)
+             .order_by(TaskList.name.asc())
+             .all())
+    return render_template("tasks_edit.html", task=t, lists=lists)
 
 @bp.post("/tasks/<int:tid>/edit")                           # process the edit form submission                            # route
 @login_required                                             # only logged-in users                                         # guard
@@ -203,18 +375,18 @@ def update_task(tid: int):
         flash("Task not found.", "danger")                  # error                                                       # alert
         return redirect(url_for("tasks.list_tasks"))        # back to list                                                # redirect
 
-    description = request.form.get("description", "").strip()  # new description from form                               # read
-    due_date_raw = request.form.get("due_date", "").strip()    # new due date (calendar or typed)                        # read
-    patient_id = request.form.get("patient_id", "").strip()    # new patient id                                          # read
-    status = request.form.get("status", "").strip()            # new status                                              # read
+    description = request.form.get("description", "").strip()
+    due_date_raw = request.form.get("due_date", "").strip()
+    list_id = request.form.get("list_id", "").strip()
+    status = request.form.get("status", "").strip()
 
-    if not description:                                    # ensure description present                                   # validate
-        flash("Description is required.", "danger")        # error                                                       # alert
-        return redirect(url_for("tasks.edit_task", tid=tid))   # back to edit                                            # redirect
+    if not description:
+        flash("Description is required.", "danger")
+        return redirect(url_for("tasks.edit_task", tid=tid))
 
-    if not patient_id.isdigit():                           # ensure patient id is numeric                                 # validate
-        flash("Select a valid patient.", "danger")         # error                                                       # alert
-        return redirect(url_for("tasks.edit_task", tid=tid))   # back to edit                                            # redirect
+    if not list_id.isdigit():
+        flash("Select a valid list.", "danger")
+        return redirect(url_for("tasks.edit_task", tid=tid))
 
     if status not in ALLOWED_STATUSES:                     # ensure status is allowed                                     # validate
         flash("Bad status.", "danger")                     # error                                                       # alert
@@ -240,17 +412,22 @@ def update_task(tid: int):
 
         due_date = parsed.strftime("%Y-%m-%d")             # store normalized ISO                                         # normalize
 
-    # verify the selected patient belongs to the user
-    patient = Patient.query.filter_by(id=int(patient_id), user_id=current_user.id).first()  # ownership check            # query
-    if not patient:                                       # not found/not owned                                          # check
-        flash("Patient not found.", "danger")             # error                                                        # alert
-        return redirect(url_for("tasks.edit_task", tid=tid))  # back                                                     # redirect
+    # verify the selected list belongs to the user
+    lst = TaskList.query.filter_by(id=int(list_id), user_id=current_user.id).first()
+    if not lst:
+        flash("List not found.", "danger")
+        return redirect(url_for("tasks.edit_task", tid=tid))
+
+    priority = request.form.get("priority", "medium").strip()
+    if priority not in ALLOWED_PRIORITIES:
+        priority = "medium"
 
     # apply updates
-    t.description = description                           # set description                                              # update
-    t.due_date = due_date                                 # set due date (ISO or None)                                   # update
-    t.patient_id = patient.id                             # set patient link                                             # update
-    t.status = status                                     # set status                                                   # update
+    t.description = description
+    t.due_date = due_date
+    t.list_id = lst.id
+    t.status = status
+    t.priority = priority
     db.session.commit()                                   # save changes                                                 # commit
 
     flash("Task updated.", "success")                     # success message                                              # alert

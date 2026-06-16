@@ -1,0 +1,24 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div style="max-width:540px; margin:0 auto; padding:0 1rem 2rem;">
+
+  <h2 class="mb-4" style="font-size:1.4em; font-weight:600; color:#2c3e50;">New List</h2>
+
+  <form method="post" action="{{ url_for('lists.create_list') }}" class="row g-3" autocomplete="off">
+    <div class="col-12">
+      <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+      <input name="name" class="form-control" required autocomplete="off">
+    </div>
+    <div class="col-12">
+      <label class="form-label fw-semibold">Description <span class="text-muted fw-normal">(optional)</span></label>
+      <input name="description" class="form-control" autocomplete="off">
+    </div>
+    <div class="col-12 mt-2">
+      <button class="btn btn-primary">Create List</button>
+      <a class="btn btn-link text-muted" href="{{ url_for('lists.list_lists') }}">Cancel</a>
+    </div>
+  </form>
+
+</div>
+{% endblock %}

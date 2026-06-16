@@ -1,0 +1,102 @@
+{% extends "layout.html" %}
+{% block content %}
+<div style="max-width:640px; margin:0 auto; padding:0 1rem 2rem;">
+
+  <h2 class="mb-1" style="font-size:1.4em; font-weight:600; color:#2c3e50;">Add Article</h2>
+  <p class="text-muted small mb-4">Add a link or upload a PDF to your reading list.</p>
+
+  <form method="post" action="{{ url_for('articles.create_article') }}"
+        class="row g-3" autocomplete="off" enctype="multipart/form-data">
+
+    <div class="col-12">
+      <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
+      <input name="title" class="form-control" required autocomplete="off">
+    </div>
+
+    <div class="col-md-8">
+      <label class="form-label fw-semibold">Author</label>
+      <input name="author" class="form-control" placeholder="e.g. Adam Grant" autocomplete="off">
+    </div>
+
+    <div class="col-md-6">
+      <label class="form-label fw-semibold">Category</label>
+      <select name="category" class="form-select">
+        <option value="">— None —</option>
+        {% for cat in categories %}
+          <option value="{{ cat }}">{{ cat }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-12">
+      <label class="form-label fw-semibold">URL <span class="text-muted fw-normal small">(required unless uploading a file)</span></label>
+      <input name="url" type="url" class="form-control" placeholder="https://..." autocomplete="off">
+    </div>
+
+    <div class="col-12">
+      <label class="form-label fw-semibold">or Upload File <span class="text-muted fw-normal small">(.pdf, .doc, .docx)</span></label>
+      <div id="dropZone" style="border:2px dashed #ccc;border-radius:8px;padding:1.5rem;text-align:center;color:#aaa;cursor:pointer;transition:border-color .2s;">
+        <div id="dropLabel">Drag &amp; drop a file here, or <span style="color:#0d6efd;text-decoration:underline;">browse</span></div>
+        <div id="dropFileName" style="font-size:.85em;color:#555;margin-top:.4rem;"></div>
+      </div>
+      <input id="fileInput" name="pdf" type="file" class="d-none" accept=".pdf,.doc,.docx">
+      <div class="form-text">Either URL or file is required. Only upload files you have the right to store.</div>
+    </div>
+
+    <div class="col-12">
+      <label class="form-label fw-semibold">Summary <span class="text-danger">*</span></label>
+      <textarea name="summary" class="form-control" rows="3" required
+                placeholder="2–3 sentences that make you want to read it."></textarea>
+    </div>
+
+    <div class="col-12">
+      <label class="form-label fw-semibold">Tags <span class="text-muted fw-normal small">(comma-separated)</span></label>
+      <input name="tags" class="form-control" placeholder="e.g. habits, medicine, leadership" autocomplete="off">
+      <div class="form-text">Common: habits, psychology, management, medicine, leadership, decision-making, wellbeing</div>
+    </div>
+
+    <div class="col-12 mt-2">
+      <button class="btn btn-primary">Add to Reading List</button>
+      <a class="btn btn-link text-muted" href="{{ url_for('articles.reading_log') }}">Cancel</a>
+    </div>
+
+  </form>
+</div>
+
+<script>
+(function() {
+  var zone = document.getElementById('dropZone');
+  var input = document.getElementById('fileInput');
+  var label = document.getElementById('dropFileName');
+
+  zone.addEventListener('click', function() { input.click(); });
+
+  input.addEventListener('change', function() {
+    if (input.files[0]) label.textContent = input.files[0].name;
+  });
+
+  zone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    zone.style.borderColor = '#0d6efd';
+  });
+  zone.addEventListener('dragleave', function() {
+    zone.style.borderColor = '#ccc';
+  });
+  zone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    zone.style.borderColor = '#ccc';
+    var file = e.dataTransfer.files[0];
+    if (!file) return;
+    var ext = file.name.split('.').pop().toLowerCase();
+    if (!['pdf','doc','docx'].includes(ext)) {
+      alert('Only .pdf, .doc, or .docx files are supported.');
+      return;
+    }
+    var dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    label.textContent = file.name;
+  });
+})();
+</script>
+{% endblock %}

@@ -2,42 +2,30 @@
 {% block content %}
 <div style="max-width:900px; margin:0 auto; padding:0 1rem 2rem;">
 
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="mb-0" style="font-size:1.4em; font-weight:600; color:#2c3e50;">All Tasks</h2>
-    <a class="btn btn-sm btn-primary" href="{{ url_for('tasks.new_task') }}">+ New Task</a>
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h2 class="mb-0 d-flex align-items-center gap-2" style="font-size:1.4em; font-weight:600; color:#2c3e50;">
+      <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:{{ lst.color }};flex-shrink:0;"></span>
+      {{ lst.name }}
+    </h2>
+    <a class="btn btn-sm btn-primary" href="{{ url_for('tasks.new_task') }}?list_id={{ lst.id }}">+ New Task</a>
   </div>
 
-  <form class="d-flex flex-wrap gap-2 mb-4" method="get" action="{{ url_for('tasks.list_tasks') }}">
-    <select name="status" class="form-select form-select-sm" style="width:auto;">
-      <option value="">All statuses</option>
-      <option value="pending" {{ 'selected' if status=='pending' }}>Pending</option>
-      <option value="in_progress" {{ 'selected' if status=='in_progress' }}>In Progress</option>
-      <option value="completed" {{ 'selected' if status=='completed' }}>Completed</option>
-    </select>
-    <select name="priority" class="form-select form-select-sm" style="width:auto;">
-      <option value="">All priorities</option>
-      <option value="high" {{ 'selected' if priority=='high' }}>High</option>
-      <option value="medium" {{ 'selected' if priority=='medium' }}>Medium</option>
-      <option value="low" {{ 'selected' if priority=='low' }}>Low</option>
-    </select>
-    <select name="list_id" class="form-select form-select-sm" style="width:auto;">
-      <option value="">All lists</option>
-      {% for lst in all_user_lists %}
-        <option value="{{ lst.id }}" {{ 'selected' if list_id|int == lst.id }}>{{ lst.name }}</option>
-      {% endfor %}
-    </select>
-    <input class="form-control form-control-sm" name="q" placeholder="Search…" value="{{ q or '' }}" style="width:180px;">
-    <button class="btn btn-sm btn-outline-secondary">Filter</button>
-    {% if status or priority or list_id or q %}
-      <a class="btn btn-sm btn-link text-muted text-decoration-none" href="{{ url_for('tasks.list_tasks') }}">Clear</a>
-    {% endif %}
-  </form>
+  {% if lst.description %}
+  <p class="text-muted mb-2" style="font-size:.9em;">{{ lst.description }}</p>
+  {% endif %}
+
+  <div class="mb-3">
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('lists.edit_list', lid=lst.id) }}">Edit list</a>
+    <form method="post" action="{{ url_for('lists.delete_list', lid=lst.id) }}" style="display:inline"
+          onsubmit="return confirm('Delete this list? This cannot be undone.');">
+      <button class="btn btn-sm btn-outline-danger">Delete list</button>
+    </form>
+  </div>
 
   {% if tasks %}
   <table class="table table-sm align-middle" style="font-size:.9em;">
     <thead class="text-muted" style="font-size:.78em; text-transform:uppercase; letter-spacing:.04em;">
       <tr>
-        <th style="width:14px;"></th>
         <th>Description</th>
         <th>Priority</th>
         <th>Due</th>
@@ -47,10 +35,7 @@
     </thead>
     <tbody>
       {% for t in tasks %}
-      <tr class="task-row" data-task-id="{{ t.id }}" data-list-id="{{ t.list_id }}">
-        <td style="padding-right:2px;">
-          <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:{{ list_colors.get(t.list_id,'#ccc') }};vertical-align:middle;"></span>
-        </td>
+      <tr class="task-row" data-task-id="{{ t.id }}" data-list-id="{{ lst.id }}">
         <td>
           <span class="task-name" style="cursor:pointer; text-decoration:underline dotted #bbb;"
                 onclick="openTaskDetail({{ t.id }})">{{ t.description }}</span>
@@ -69,23 +54,24 @@
           {% endif %}
           <form method="post" action="{{ url_for('tasks.delete_task', tid=t.id) }}" style="display:inline"
                 onsubmit="return confirm('Delete this task?');">
+            <input type="hidden" name="redirect_to" value="{{ url_for('lists.list_detail', lid=lst.id) }}">
             <button class="btn btn-sm btn-link text-danger p-0 px-1" title="Delete">&#128465;</button>
           </form>
         </td>
       </tr>
+      {% else %}
+      <tr><td colspan="5" class="text-muted text-center py-4">No tasks in this list yet.</td></tr>
       {% endfor %}
     </tbody>
   </table>
   {% else %}
   <div class="text-center text-muted py-5">
-    <p class="mb-1">No tasks found.</p>
-    {% if status or priority or list_id or q %}
-      <a href="{{ url_for('tasks.list_tasks') }}" class="small">Clear filters</a>
-    {% else %}
-      <a href="{{ url_for('tasks.new_task') }}" class="small">Create your first task</a>
-    {% endif %}
+    <p class="mb-1">No tasks yet.</p>
+    <a href="{{ url_for('tasks.new_task') }}?list_id={{ lst.id }}" class="small">Add a task</a>
   </div>
   {% endif %}
+
+  <a class="btn btn-outline-secondary btn-sm mt-2" href="{{ url_for('lists.list_lists') }}">← All Lists</a>
 
 </div>
 
@@ -146,6 +132,8 @@
   </div>
 </div>
 <script>
+var CURRENT_LIST_ID = {{ lst.id }};
+
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 var currentDetailTaskId=null;
 function openTaskDetail(tid){
@@ -203,11 +191,14 @@ document.getElementById('detailSaveBtn').addEventListener('click',function(){
         bootstrap.Modal.getInstance(document.getElementById('taskDetailModal')).hide();
         var row=document.querySelector('.task-row[data-task-id="'+tid+'"]');
         if(row){
-          var nameEl=row.querySelector('.task-name');
-          if(nameEl)nameEl.textContent=document.getElementById('detailDesc').value.trim();
-          if(document.getElementById('detailStatus').value==='completed'){
+          var newList=parseInt(document.getElementById('detailList').value);
+          var newStatus=document.getElementById('detailStatus').value;
+          if(newStatus==='completed'||newList!==CURRENT_LIST_ID){
             row.style.transition='opacity .3s';row.style.opacity='0';
             setTimeout(function(){row.remove();},300);
+          }else{
+            var nameEl=row.querySelector('.task-name');
+            if(nameEl)nameEl.textContent=document.getElementById('detailDesc').value.trim();
           }
         }
       }else{

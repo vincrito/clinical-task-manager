@@ -1,45 +1,53 @@
-{% extends "layout.html" %}                                                          <!-- base layout -->
+{% extends "layout.html" %}
 
 {% block content %}
-<h2 class="mb-3">Edit Task</h2>                                                     <!-- page title -->
+<div style="max-width:640px; margin:0 auto; padding:0 1rem 2rem;">
 
-<form method="post" action="{{ url_for('tasks.update_task', tid=task.id) }}" class="row g-3"> <!-- submit to POST edit -->
-  <div class="col-md-8">
-    <label class="form-label">Description</label>                                   <!-- label -->
-    <input name="description" class="form-control" value="{{ task.description }}" required> <!-- current description -->
-  </div>
+  <h2 class="mb-4" style="font-size:1.4em; font-weight:600; color:#2c3e50;">Edit Task</h2>
 
-  <div class="col-md-4">
-    <label class="form-label">Due date</label>                                      <!-- label -->
-    <input name="due_date" type="date" class="form-control"
-           value="{{ task.due_date }}">                                             <!-- ISO prefill; calendar shows it -->
-    <div class="form-text">You can also type MM/DD/YY.</div>                        <!-- helper -->
-  </div>
+  <form method="post" action="{{ url_for('tasks.update_task', tid=task.id) }}" class="row g-3">
+    <div class="col-12">
+      <label class="form-label fw-semibold">Description <span class="text-danger">*</span></label>
+      <input name="description" class="form-control" value="{{ task.description }}" required>
+    </div>
 
-  <div class="col-md-6">
-    <label class="form-label">Patient</label>                                       <!-- label -->
-    <select name="patient_id" class="form-select" required>                         <!-- dropdown of patients -->
-      {% for p in patients %}
-        <option value="{{ p.id }}" {{ 'selected' if p.id == task.patient_id else '' }}>  <!-- preselect current -->
-          {{ (p.last_name or '') ~ (', ' ~ p.first_name if p.first_name) }}         <!-- LAST, First -->
-          {% if p.mrn %} (MRN {{ p.mrn }}){% endif %}                               <!-- MRN if present -->
-        </option>
-      {% endfor %}
-    </select>
-  </div>
+    <div class="col-md-6">
+      <label class="form-label fw-semibold">List <span class="text-danger">*</span></label>
+      <select name="list_id" class="form-select" required>
+        {% for lst in lists %}
+          <option value="{{ lst.id }}" {{ 'selected' if lst.id == task.list_id }}>{{ lst.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
 
-  <div class="col-md-6">
-    <label class="form-label">Status</label>                                        <!-- label -->
-    <select name="status" class="form-select" required>                             <!-- status select -->
-      <option value="pending" {{ 'selected' if task.status=='pending' else '' }}>Pending</option>          <!-- pending -->
-      <option value="in_progress" {{ 'selected' if task.status=='in_progress' else '' }}>In Progress</option> <!-- in prog -->
-      <option value="completed" {{ 'selected' if task.status=='completed' else '' }}>Completed</option>     <!-- completed -->
-    </select>
-  </div>
+    <div class="col-md-6">
+      <label class="form-label fw-semibold">Due date</label>
+      <input name="due_date" type="date" class="form-control" value="{{ task.due_date }}">
+    </div>
 
-  <div class="col-12">
-    <button class="btn btn-primary">Save</button>                                   <!-- submit -->
-    <a class="btn btn-link" href="{{ url_for('tasks.list_tasks') }}">Cancel</a>     <!-- cancel -->
-  </div>
-</form>
+    <div class="col-md-6">
+      <label class="form-label fw-semibold">Status</label>
+      <select name="status" class="form-select" required>
+        <option value="pending" {{ 'selected' if task.status=='pending' }}>Pending</option>
+        <option value="in_progress" {{ 'selected' if task.status=='in_progress' }}>In Progress</option>
+        <option value="completed" {{ 'selected' if task.status=='completed' }}>Completed</option>
+      </select>
+    </div>
+
+    <div class="col-md-6">
+      <label class="form-label fw-semibold">Priority</label>
+      <select name="priority" class="form-select">
+        <option value="low" {{ 'selected' if task.priority=='low' }}>Low</option>
+        <option value="medium" {{ 'selected' if (task.priority=='medium' or not task.priority) }}>Medium</option>
+        <option value="high" {{ 'selected' if task.priority=='high' }}>High</option>
+      </select>
+    </div>
+
+    <div class="col-12 mt-2">
+      <button class="btn btn-primary">Save Changes</button>
+      <a class="btn btn-link text-muted" href="{{ url_for('tasks.list_tasks') }}">Cancel</a>
+    </div>
+  </form>
+
+</div>
 {% endblock %}

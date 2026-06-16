@@ -1,24 +1,573 @@
-{% extends "layout.html" %}         <!-- use layout.html as the base -->
+{% extends "layout.html" %}
 
-{% block content %}                 <!-- fill in the content block -->
-  <div style="max-width:700px; margin:60px auto; text-align:left; font-family:sans-serif; line-height:1.6;">
-    <h1 style="font-size:2.2em; font-weight:600; margin-bottom:0.5em; color:#2c3e50;">
-        Clinical Task Manager
-    </h1>
-    <p style="font-size:1.1em; color:#444;">
-        Welcome! This is your central hub to manage patients and their tasks.
-        Each patient has a dedicated space, and every task is tracked clearly.
+{% block content %}
+<div style="max-width:900px; margin:0 auto; padding:0 1rem 2rem;">
+
+  {% if current_user.is_authenticated %}
+
+    <!-- Reading card (compact, top) -->
+    {% if article %}
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body py-2 px-3">
+        <div class="d-flex justify-content-between align-items-start gap-3">
+          <div style="flex:1; min-width:0;">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <span class="text-muted" style="font-size:.7em; text-transform:uppercase; letter-spacing:.05em; font-weight:600;">Worth reading</span>
+              {% for tag in article.tag_list() %}
+                <span class="badge bg-light text-secondary border" style="font-size:.65em;">{{ tag }}</span>
+              {% endfor %}
+            </div>
+            <div class="fw-semibold" style="font-size:.92em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              {% if article.author %}<span class="text-muted fw-normal" style="font-size:.88em;">{{ article.author }} &mdash; </span>{% endif %}{{ article.title }}
+            </div>
+            <p class="text-secondary mb-0" style="font-size:.82em; line-height:1.4;">{{ article.summary }}</p>
+          </div>
+          <div class="d-flex flex-column align-items-end gap-1 flex-shrink-0">
+            <a href="{{ article.url }}" target="_blank" rel="noopener" class="btn btn-sm btn-primary" style="font-size:.78em;">Read &rarr;</a>
+            <div class="d-flex gap-1">
+              <form method="post" action="{{ url_for('articles.react', aid=article.id) }}" style="display:inline">
+                <input type="hidden" name="reaction" value="liked">
+                <button class="btn btn-sm btn-outline-success" title="Save" style="font-size:.82em; padding:.2rem .5rem;">&#128077;</button>
+              </form>
+              <form method="post" action="{{ url_for('articles.react', aid=article.id) }}" style="display:inline">
+                <input type="hidden" name="reaction" value="disliked">
+                <button class="btn btn-sm btn-outline-secondary" title="Not for me" style="font-size:.82em; padding:.2rem .5rem;">&#128078;</button>
+              </form>
+              <form method="post" action="{{ url_for('articles.skip', aid=article.id) }}" style="display:inline">
+                <button class="btn btn-sm btn-link text-muted p-0" style="font-size:.78em;">Skip</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="card border-0 bg-light mb-3">
+      <div class="card-body text-center text-muted py-2" style="font-size:.85em;">
+        &#127942; Reading queue is empty. <a href="{{ url_for('articles.new_article') }}">Add articles</a>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Overdue / due-today / due-this-week inline cards -->
+    <div id="overdueSection" class="card border-0 shadow-sm mb-3{% if not overdue %} d-none{% endif %}" style="border-left:4px solid #e74c3c !important;">
+      <div class="card-body py-2 px-3">
+        <button class="btn btn-link p-0 fw-semibold text-decoration-none d-flex align-items-center gap-2"
+                style="font-size:.9em; color:#e74c3c;"
+                data-bs-toggle="collapse" data-bs-target="#overdueList" aria-expanded="false">
+          &#9888; Overdue (<span id="overdueCount">{{ overdue|length }}</span>)
+          <span class="text-muted" style="font-size:.8em;">&#9660;</span>
+        </button>
+        <div class="collapse" id="overdueList">
+          <ul class="list-unstyled mb-0 mt-2" id="overdueUl">
+            {% for t in overdue %}
+            <li class="d-flex align-items-center gap-2 py-1 border-bottom task-row" data-task-id="{{ t.id }}" data-list-id="{{ t.list_id }}" style="font-size:.88em;">
+              <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:{{ list_colors.get(t.list_id, '#888') }};flex-shrink:0;"></span>
+              <span class="task-name flex-grow-1" style="cursor:pointer;text-decoration:underline dotted #aaa;" onclick="openTaskDetail({{ t.id }})">{{ t.description }}</span>{% if comment_counts.get(t.id, 0) > 0 %}<span class="comment-bubble" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-placement="top" data-bs-content="{{ comment_latest.get(t.id,'') }}" tabindex="0" style="color:#aaa;font-size:.78em;cursor:default;" onclick="openTaskDetail({{ t.id }})" title="has comments">&#128172;</span>{% endif %}
+              <div class="d-flex align-items-center gap-2 ms-auto flex-shrink-0">
+                {% if t.priority == 'high' %}<span class="badge text-bg-danger">High</span>
+                {% elif t.priority == 'low' %}<span class="badge text-bg-secondary">Low</span>
+                {% else %}<span class="badge text-bg-warning">Med</span>{% endif %}
+                <span class="text-muted text-nowrap">{{ t.due_date | mdy }}</span>
+                <button class="btn btn-sm btn-link text-success complete-btn p-0 px-1" title="Mark done">&#10003;</button>
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div id="dueTodaySection" class="card border-0 shadow-sm mb-3{% if not due_today %} d-none{% endif %}" style="border-left:4px solid #e67e22 !important;">
+      <div class="card-body py-2 px-3">
+        <button class="btn btn-link p-0 fw-semibold text-decoration-none d-flex align-items-center gap-2"
+                style="font-size:.9em; color:#e67e22;"
+                data-bs-toggle="collapse" data-bs-target="#dueTodayList" aria-expanded="true">
+          &#128197; Due today (<span id="dueTodayCount">{{ due_today|length }}</span>)
+          <span class="text-muted" style="font-size:.8em;">&#9660;</span>
+        </button>
+        <div class="collapse show" id="dueTodayList">
+          <ul class="list-unstyled mb-0 mt-2" id="dueTodayUl">
+            {% for t in due_today %}
+            <li class="d-flex align-items-center gap-2 py-1 border-bottom task-row" data-task-id="{{ t.id }}" data-list-id="{{ t.list_id }}" style="font-size:.88em;">
+              <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:{{ list_colors.get(t.list_id, '#888') }};flex-shrink:0;"></span>
+              <span class="task-name flex-grow-1" style="cursor:pointer;text-decoration:underline dotted #aaa;" onclick="openTaskDetail({{ t.id }})">{{ t.description }}</span>{% if comment_counts.get(t.id, 0) > 0 %}<span class="comment-bubble" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-placement="top" data-bs-content="{{ comment_latest.get(t.id,'') }}" tabindex="0" style="color:#aaa;font-size:.78em;cursor:default;" onclick="openTaskDetail({{ t.id }})" title="has comments">&#128172;</span>{% endif %}
+              <div class="d-flex align-items-center gap-2 ms-auto flex-shrink-0">
+                {% if t.priority == 'high' %}<span class="badge text-bg-danger">High</span>
+                {% elif t.priority == 'low' %}<span class="badge text-bg-secondary">Low</span>
+                {% else %}<span class="badge text-bg-warning">Med</span>{% endif %}
+                <button class="btn btn-sm btn-link text-success complete-btn p-0 px-1" title="Mark done">&#10003;</button>
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div id="dueWeekSection" class="card border-0 shadow-sm mb-4{% if not due_this_week %} d-none{% endif %}">
+      <div class="card-body py-2 px-3">
+        <button class="btn btn-link p-0 fw-semibold text-decoration-none text-dark d-flex align-items-center gap-2"
+                style="font-size:.9em;"
+                data-bs-toggle="collapse" data-bs-target="#dueWeekList" aria-expanded="false">
+          &#128336; Due this week (<span id="dueWeekCount">{{ due_this_week|length }}</span>)
+          <span class="text-muted" style="font-size:.8em;">&#9660;</span>
+        </button>
+        <div class="collapse" id="dueWeekList">
+          <ul class="list-unstyled mb-0 mt-2" id="dueWeekUl">
+            {% for t in due_this_week %}
+            <li class="d-flex align-items-center gap-2 py-1 border-bottom task-row" data-task-id="{{ t.id }}" data-list-id="{{ t.list_id }}" style="font-size:.88em;">
+              <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:{{ list_colors.get(t.list_id, '#888') }};flex-shrink:0;"></span>
+              <span class="task-name flex-grow-1" style="cursor:pointer;text-decoration:underline dotted #aaa;" onclick="openTaskDetail({{ t.id }})">{{ t.description }}</span>{% if comment_counts.get(t.id, 0) > 0 %}<span class="comment-bubble" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-placement="top" data-bs-content="{{ comment_latest.get(t.id,'') }}" tabindex="0" style="color:#aaa;font-size:.78em;cursor:default;" onclick="openTaskDetail({{ t.id }})" title="has comments">&#128172;</span>{% endif %}
+              <div class="d-flex align-items-center gap-2 ms-auto flex-shrink-0">
+                {% if t.priority == 'high' %}<span class="badge text-bg-danger">High</span>
+                {% elif t.priority == 'low' %}<span class="badge text-bg-secondary">Low</span>
+                {% else %}<span class="badge text-bg-warning">Med</span>{% endif %}
+                <span class="text-muted text-nowrap">{{ t.due_date | mdy }}</span>
+                <button class="btn btn-sm btn-link text-success complete-btn p-0 px-1" title="Mark done">&#10003;</button>
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Per-list panels -->
+    {% if list_panels %}
+    <div class="row g-3 mb-4">
+      {% for lp in list_panels %}
+      <div class="col-12 col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-body py-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="card-title mb-0 fw-semibold d-flex align-items-center gap-2">
+                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{{ lp.color }};flex-shrink:0;"></span>
+                <a href="{{ url_for('lists.list_detail', lid=lp.id) }}" class="text-decoration-none text-dark">{{ lp.name }}</a>
+              </h6>
+              <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-outline-primary quick-add-btn"
+                        style="font-size:.75em; padding:.2rem .6rem;"
+                        data-list-id="{{ lp.id }}"
+                        data-list-name="{{ lp.name }}"
+                        data-bs-toggle="modal"
+                        data-bs-target="#quickAddModal">+ Task</button>
+              </div>
+            </div>
+            <div class="progress mb-2" style="height:5px; border-radius:3px;">
+              <div class="progress-bar bg-success" role="progressbar"
+                   style="width:{{ lp.pct }}%"
+                   aria-valuenow="{{ lp.pct }}" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+            <div class="d-flex gap-3" style="font-size:.8em; color:#aaa;">
+              <span>{{ lp.pending }} pending / {{ lp.in_progress }} in progress / {{ lp.completed }} done</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Reading card now at top -->
+
+  {% else %}
+    <p style="color:#666; font-style:italic;">
+      <a href="{{ url_for('auth.login') }}">Log in</a> or
+      <a href="{{ url_for('auth.register') }}">register</a> to get started.
     </p>
-    <p style="font-size:1.1em; color:#444;">
-        Status is color-coded for clarity:
-        <span style="color:#e74c3c;">Pending</span>,
-        <span style="color:#e67e22;">In Progress</span>,
-        <span style="color:#27ae60;">Completed</span>.
-    </p>
-    <p style="margin-top:1em; font-size:1em; font-style:italic; color:#666;">
-        A simple system to keep everything moving forward without a hitch.
-    </p>
+  {% endif %}
+
+  {% if current_user.is_authenticated %}
+  <div class="mt-4 pt-3 border-top d-flex gap-3" style="font-size:.82em;">
+    <a href="{{ url_for('tasks.list_tasks') }}" class="text-muted text-decoration-none">All Tasks</a>
+    <a href="{{ url_for('lists.list_lists') }}" class="text-muted text-decoration-none">My Lists</a>
+    <a href="{{ url_for('articles.browse_articles') }}" class="text-muted text-decoration-none">Article Library</a>
+    <a href="{{ url_for('articles.reading_log') }}" class="text-muted text-decoration-none">Reading Log</a>
+    <a href="{{ url_for('articles.new_article') }}" class="text-muted text-decoration-none">Add Article</a>
+  </div>
+  {% endif %}
+
 </div>
 
+<!-- Quick-add task modal -->
+<div class="modal fade" id="quickAddModal" tabindex="-1" aria-labelledby="quickAddModalLabel" aria-modal="true" role="dialog">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-1">
+        <h5 class="modal-title" id="quickAddModalLabel">Add task to <span id="quickAddListName"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="quickAddError" class="alert alert-danger py-1 px-2 small mb-2" style="display:none;"></div>
+        <div class="mb-3">
+          <label class="form-label">Description</label>
+          <input id="quickAddDesc" class="form-control" required
+                 autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+        </div>
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label">Due date</label>
+            <input id="quickAddDue" type="date" class="form-control">
+          </div>
+          <div class="col-6">
+            <label class="form-label">Priority</label>
+            <select id="quickAddPriority" class="form-select">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-1">
+        <button id="quickAddSubmit" class="btn btn-primary btn-sm">Create</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Task detail modal -->
+<div class="modal fade" id="taskDetailModal" tabindex="-1" aria-modal="true" role="dialog">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-1">
+        <h5 class="modal-title">Task Detail</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="detailError" class="alert alert-danger py-1 px-2 small mb-2" style="display:none;"></div>
+        <div class="row g-3 mb-3">
+          <div class="col-12">
+            <label class="form-label fw-semibold">Description</label>
+            <textarea id="detailDesc" class="form-control" rows="2" autocomplete="off" spellcheck="false"></textarea>
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label">Due date</label>
+            <input id="detailDue" type="date" class="form-control">
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label">Priority</label>
+            <select id="detailPriority" class="form-select">
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label">Status</label>
+            <select id="detailStatus" class="form-select">
+              <option value="pending">Pending</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label">List</label>
+            <select id="detailList" class="form-select"></select>
+          </div>
+        </div>
+        <hr class="my-2">
+        <div class="fw-semibold mb-2" style="font-size:.9em;">Comments</div>
+        <ul id="detailComments" class="list-unstyled mb-3" style="max-height:180px;overflow-y:auto;font-size:.88em;"></ul>
+        <div class="d-flex gap-2">
+          <input id="detailCommentInput" class="form-control form-control-sm"
+                 placeholder="Add a comment…" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <button id="detailCommentBtn" class="btn btn-sm btn-secondary">Add</button>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-1">
+        <button id="detailSaveBtn" class="btn btn-primary btn-sm">Save</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var LIST_COLOR_MAP = {{ list_colors | tojson }};
+document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll('[data-bs-toggle="popover"]').forEach(function(el){new bootstrap.Popover(el,{sanitize:false});});});
+var TODAY    = "{{ today }}";
+var WEEK_END = "{{ week_end }}";
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function fmtDate(iso) {
+  if (!iso) return '';
+  var p = iso.split('-');
+  return p[1]+'/'+p[2]+'/'+p[0].slice(2);
+}
+function priorityBadge(p) {
+  if (p === 'high')   return '<span class="badge text-bg-danger">High</span>';
+  if (p === 'low')    return '<span class="badge text-bg-secondary">Low</span>';
+  return '<span class="badge text-bg-warning">Med</span>';
+}
+function buildTaskRow(task, showDate) {
+  var color = LIST_COLOR_MAP[String(task.list_id)] || '#888';
+  var li = document.createElement('li');
+  li.className = 'd-flex align-items-center gap-2 py-1 border-bottom task-row';
+  li.dataset.taskId = task.task_id;
+  li.dataset.listId = task.list_id;
+  li.style.fontSize = '.88em';
+  li.innerHTML =
+    '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+color+';flex-shrink:0;"></span>'+
+    '<span class="task-name flex-grow-1" style="cursor:pointer;text-decoration:underline dotted #aaa;">'+escHtml(task.description)+'</span>'+
+    '<div class="d-flex align-items-center gap-2 ms-auto flex-shrink-0">'+
+      priorityBadge(task.priority)+
+      (showDate && task.due_date ? '<span class="text-muted text-nowrap">'+fmtDate(task.due_date)+'</span>' : '')+
+      '<button class="btn btn-sm btn-outline-success complete-btn" style="font-size:.75em;padding:.15rem .5rem;">&#10003; Done</button>'+
+    '</div>';
+  li.querySelector('.task-name').addEventListener('click', function() {
+    openTaskDetail(task.task_id);
+  });
+  return li;
+}
+function bumpCount(sectionId, countId, delta) {
+  var section = document.getElementById(sectionId);
+  var countEl = document.getElementById(countId);
+  if (!section || !countEl) return;
+  var n = (parseInt(countEl.textContent) || 0) + delta;
+  countEl.textContent = Math.max(0, n);
+  if (n <= 0) section.classList.add('d-none');
+  else        section.classList.remove('d-none');
+}
+
+// ── Quick-add ──────────────────────────────────────────────────────────────
+(function() {
+  var currentListId = null;
+  document.querySelectorAll('.quick-add-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      currentListId = this.dataset.listId;
+      document.getElementById('quickAddListName').textContent = this.dataset.listName;
+      document.getElementById('quickAddDesc').value = '';
+      document.getElementById('quickAddDue').value = '';
+      document.getElementById('quickAddPriority').value = 'medium';
+      document.getElementById('quickAddError').style.display = 'none';
+    });
+  });
+
+  document.getElementById('quickAddSubmit').addEventListener('click', function() {
+    var desc = document.getElementById('quickAddDesc').value.trim();
+    var due  = document.getElementById('quickAddDue').value;
+    var pri  = document.getElementById('quickAddPriority').value;
+    var errEl = document.getElementById('quickAddError');
+    if (!desc) { errEl.textContent='Description is required.'; errEl.style.display=''; return; }
+
+    var btn = this;
+    btn.disabled = true; btn.textContent = 'Saving…';
+
+    var fd = new FormData();
+    fd.append('list_id', currentListId);
+    fd.append('description', desc);
+    fd.append('due_date', due);
+    fd.append('priority', pri);
+
+    fetch('{{ url_for("tasks.quick_add") }}', { method:'POST', body:fd })
+      .then(function(r){ return r.json(); })
+      .then(function(data) {
+        btn.disabled = false; btn.textContent = 'Create';
+        if (data.ok) {
+          errEl.style.display = 'none';
+          bootstrap.Modal.getInstance(document.getElementById('quickAddModal')).hide();
+
+          // update list panel pending count
+          document.querySelectorAll('.quick-add-btn[data-list-id="'+data.list_id+'"]').forEach(function(b) {
+            var card = b.closest('.card-body');
+            if (!card) return;
+            card.querySelectorAll('.d-flex.gap-3 span').forEach(function(s) {
+              if (s.textContent.includes('pending')) {
+                var m = s.textContent.match(/(\d+)/);
+                if (m) s.textContent = '\u25cf '+(parseInt(m[1])+1)+' pending';
+              }
+            });
+          });
+
+          // inject row into due-today or due-this-week
+          if (data.due_date === TODAY) {
+            document.getElementById('dueTodayUl').appendChild(buildTaskRow(data, false));
+            bumpCount('dueTodaySection','dueTodayCount', 1);
+          } else if (data.due_date > TODAY && data.due_date <= WEEK_END) {
+            document.getElementById('dueWeekUl').appendChild(buildTaskRow(data, true));
+            bumpCount('dueWeekSection','dueWeekCount', 1);
+          }
+        } else {
+          errEl.textContent = data.error || 'Something went wrong.';
+          errEl.style.display = '';
+        }
+      })
+      .catch(function() {
+        btn.disabled = false; btn.textContent = 'Create';
+        errEl.textContent = 'Network error.'; errEl.style.display = '';
+      });
+  });
+})();
+
+// ── Mark complete ──────────────────────────────────────────────────────────
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('.complete-btn');
+  if (!btn) return;
+  var row = btn.closest('.task-row');
+  var tid = row.dataset.taskId;
+  btn.disabled = true;
+  fetch('/tasks/'+tid+'/complete-json', { method:'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        var section = row.closest('[id$="Section"]');
+        row.style.transition = 'opacity .3s';
+        row.style.opacity = '0';
+        setTimeout(function() {
+          row.remove();
+          if (section) {
+            var countId = section.id.replace('Section','Count');
+            bumpCount(section.id, countId, -1);
+          }
+        }, 300);
+      } else { btn.disabled = false; }
+    })
+    .catch(function() { btn.disabled = false; });
+});
+
+// ── Task detail modal ──────────────────────────────────────────────────────
+var currentDetailTaskId = null;
+
+function openTaskDetail(tid) {
+  currentDetailTaskId = tid;
+  document.getElementById('detailError').style.display = 'none';
+  document.getElementById('detailCommentInput').value = '';
+  fetch('/tasks/'+tid+'/json')
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      if (!data.ok) return;
+      var t = data.task;
+      document.getElementById('detailDesc').value = t.description;
+      document.getElementById('detailDue').value  = t.due_date;
+      document.getElementById('detailPriority').value = t.priority;
+      document.getElementById('detailStatus').value   = t.status;
+      var sel = document.getElementById('detailList');
+      sel.innerHTML = '';
+      data.lists.forEach(function(l) {
+        var opt = document.createElement('option');
+        opt.value = l.id; opt.textContent = l.name;
+        if (l.id == t.list_id) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      var ul = document.getElementById('detailComments');
+      ul.innerHTML = '';
+      if (!data.comments.length) {
+        ul.innerHTML = '<li class="text-muted">No comments yet.</li>';
+      } else {
+        data.comments.forEach(function(c) {
+          var li = document.createElement('li');
+          li.className = 'mb-1 pb-1 border-bottom';
+          li.innerHTML = escHtml(c.body)+' <small class="text-muted">'+escHtml(c.created_at)+'</small>';
+          ul.appendChild(li);
+        });
+        ul.scrollTop = ul.scrollHeight;
+      }
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('taskDetailModal')).show();
+    });
+}
+
+document.getElementById('detailSaveBtn').addEventListener('click', function() {
+  var tid = currentDetailTaskId;
+  var btn = this;
+  btn.disabled = true;
+  var fd = new FormData();
+  fd.append('description', document.getElementById('detailDesc').value.trim());
+  fd.append('due_date',    document.getElementById('detailDue').value);
+  fd.append('priority',    document.getElementById('detailPriority').value);
+  fd.append('status',      document.getElementById('detailStatus').value);
+  fd.append('list_id',     document.getElementById('detailList').value);
+  fetch('/tasks/'+tid+'/update-json', { method:'POST', body:fd })
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      btn.disabled = false;
+      if (data.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('taskDetailModal')).hide();
+        // update row desc in place if still visible
+        var row = document.querySelector('.task-row[data-task-id="'+tid+'"]');
+        if (row) {
+          var nameEl = row.querySelector('.task-name');
+          if (nameEl) nameEl.textContent = document.getElementById('detailDesc').value.trim();
+          if (document.getElementById('detailStatus').value === 'completed') {
+            var section = row.closest('[id$="Section"]');
+            row.style.transition = 'opacity .3s'; row.style.opacity = '0';
+            setTimeout(function() {
+              row.remove();
+              if (section) bumpCount(section.id, section.id.replace('Section','Count'), -1);
+            }, 300);
+          }
+        }
+      } else {
+        document.getElementById('detailError').textContent = data.error || 'Save failed.';
+        document.getElementById('detailError').style.display = '';
+      }
+    })
+    .catch(function() { btn.disabled = false; });
+});
+
+document.getElementById('detailCommentBtn').addEventListener('click', addDetailComment);
+document.getElementById('detailCommentInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); addDetailComment(); }
+});
+function addDetailComment() {
+  var body = document.getElementById('detailCommentInput').value.trim();
+  if (!body) return;
+  var btn = document.getElementById('detailCommentBtn');
+  btn.disabled = true;
+  var fd = new FormData();
+  fd.append('body', body);
+  fetch('/tasks/'+currentDetailTaskId+'/comment-json', { method:'POST', body:fd })
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      btn.disabled = false;
+      if (data.ok) {
+        document.getElementById('detailCommentInput').value = '';
+        var ul = document.getElementById('detailComments');
+        var placeholder = ul.querySelector('li.text-muted');
+        if (placeholder) placeholder.remove();
+        var li = document.createElement('li');
+        li.className = 'mb-1 pb-1 border-bottom';
+        li.innerHTML = escHtml(data.comment.body)+' <small class="text-muted">'+escHtml(data.comment.created_at)+'</small>';
+        ul.appendChild(li);
+        ul.scrollTop = ul.scrollHeight;
+      }
+    })
+    .catch(function() { btn.disabled = false; });
+}
+</script>
+
+<!-- Back-to-work modal (only appears after 3 skips with incomplete tasks) -->
+{% if show_work_modal %}
+<div class="modal fade" id="workModal" tabindex="-1" aria-labelledby="workModalLabel" aria-modal="true" role="dialog">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title" id="workModalLabel">&#127919; Quick check-in</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">You've skipped 3 articles and still have open tasks.</p>
+        <p class="text-muted mb-0 small">
+          No pressure — just a nudge. Knock out a task or two, then come back to read.
+        </p>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <a href="{{ url_for('tasks.list_tasks') }}" class="btn btn-primary btn-sm">Go to Tasks</a>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Stay here</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  (function() {
+    var el = document.getElementById('workModal');
+    if (el) { new bootstrap.Modal(el).show(); }
+  })();
+</script>
+{% endif %}
 
 {% endblock %}

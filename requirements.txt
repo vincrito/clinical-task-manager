@@ -4,3 +4,5 @@ Flask-Bcrypt==1.0.1          # password hashing
 Flask-SQLAlchemy==3.1.1      # ORM (DB models)
 SQLAlchemy==2.0.29           # SQL toolkit used by Flask-SQLAlchemy
 python-dotenv==1.0.1         # load .env in development
+gunicorn==22.0.0             # production WSGI server (Render)
+psycopg2-binary==2.9.9       # PostgreSQL adapter

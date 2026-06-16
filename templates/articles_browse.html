@@ -1,0 +1,96 @@
+{% extends "layout.html" %}
+{% block content %}
+<div style="max-width:780px; margin:0 auto; padding:0 1rem 2rem;">
+
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h2 class="mb-0" style="font-size:1.4em; font-weight:600; color:#2c3e50;">Article Library</h2>
+      <p class="text-muted small mb-0">Browse all articles. Save ones you want to read.</p>
+    </div>
+    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('articles.new_article') }}">+ Add Article</a>
+  </div>
+
+  <form class="d-flex flex-wrap gap-2 mb-4" method="get" action="{{ url_for('articles.browse_articles') }}">
+    <input class="form-control form-control-sm" name="q" placeholder="Search title, author, tags…"
+           value="{{ q or '' }}" style="width:220px;" autocomplete="off">
+    <select name="category" class="form-select form-select-sm" style="width:auto;">
+      <option value="">All categories</option>
+      {% for c in categories %}
+        <option value="{{ c }}" {{ 'selected' if cat==c }}>{{ c }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn btn-sm btn-outline-secondary">Filter</button>
+    {% if q or cat %}
+      <a class="btn btn-sm btn-link text-muted text-decoration-none" href="{{ url_for('articles.browse_articles') }}">Clear</a>
+    {% endif %}
+  </form>
+
+  {% if articles %}
+  <div class="d-flex flex-column gap-2">
+    {% for article in articles %}
+    {% set is_saved = article.id in saved_ids %}
+    {% set is_dismissed = article.id in reacted_ids and not is_saved %}
+    <div class="card border-0 shadow-sm {% if is_saved %}bg-light{% endif %}">
+      <div class="card-body py-2 px-3">
+        <div class="d-flex justify-content-between align-items-start gap-3">
+          <div style="flex:1; min-width:0;">
+            {% if article.author %}
+              <span class="text-muted" style="font-size:.78em;">{{ article.author }}</span>
+            {% endif %}
+            <div class="fw-semibold" style="font-size:.92em;">
+              {% if article.pdf_path %}
+                <a href="{{ url_for('static', filename=article.pdf_path) }}" target="_blank"
+                   class="text-decoration-none text-dark">{{ article.title }} <span class="text-muted" style="font-size:.75em;">PDF &#8599;</span></a>
+              {% elif article.url %}
+                <a href="{{ article.url }}" target="_blank" rel="noopener"
+                   class="text-decoration-none text-dark">{{ article.title }} <span class="text-muted" style="font-size:.75em;">&#8599;</span></a>
+              {% else %}
+                {{ article.title }}
+              {% endif %}
+            </div>
+            <p class="text-secondary mb-1" style="font-size:.82em; line-height:1.4;">{{ article.summary }}</p>
+            <div>
+              {% if article.category %}
+                <span class="badge bg-light text-secondary border me-1" style="font-size:.68em;">{{ article.category }}</span>
+              {% endif %}
+              {% for tag in article.tag_list() %}
+                <span class="badge bg-light text-secondary border me-1" style="font-size:.68em;">{{ tag }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="d-flex flex-column align-items-end gap-1 flex-shrink-0">
+            {% if is_saved %}
+              <span class="badge bg-success" style="font-size:.72em;">&#10003; Saved</span>
+              <form method="post" action="{{ url_for('articles.react', aid=article.id) }}">
+                <input type="hidden" name="reaction" value="disliked">
+                <button class="btn btn-link btn-sm text-danger p-0" style="font-size:.72em;"
+                        onclick="return confirm('Remove from reading log?');">Remove</button>
+              </form>
+            {% elif is_dismissed %}
+              <span class="text-muted" style="font-size:.72em;">Dismissed</span>
+              <form method="post" action="{{ url_for('articles.react', aid=article.id) }}">
+                <input type="hidden" name="reaction" value="liked">
+                <button class="btn btn-link btn-sm p-0" style="font-size:.72em;">Re-save</button>
+              </form>
+            {% else %}
+              <form method="post" action="{{ url_for('articles.react', aid=article.id) }}">
+                <input type="hidden" name="reaction" value="liked">
+                <input type="hidden" name="redirect_to" value="{{ url_for('articles.browse_articles', q=q, category=cat) }}">
+                <button class="btn btn-sm btn-outline-success" style="font-size:.78em; padding:.2rem .55rem;">&#128077; Save</button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="text-center text-muted py-5">
+    <p class="mb-1">No articles found.</p>
+    {% if q or cat %}<a href="{{ url_for('articles.browse_articles') }}" class="small">Clear filters</a>{% endif %}
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
