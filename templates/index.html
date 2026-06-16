@@ -179,7 +179,7 @@
   {% endif %}
 
   {% if current_user.is_authenticated %}
-  {% if not overdue and not due_today and not due_this_week %}
+  {% if not overdue and not due_today and not due_this_week and not list_panels %}
   <div class="text-center py-5 my-3">
     <div style="font-size:2.5rem; margin-bottom:.5rem;">👋</div>
     <h5 class="fw-semibold mb-1">Welcome! Let's get you set up.</h5>
