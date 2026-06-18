@@ -172,8 +172,8 @@ document.addEventListener('click', function(e) {
     .catch(function(){ btn.disabled = false; });
 });
 
-// New Note modal
-(function() {
+// New Note modal — wrapped in DOMContentLoaded so modal HTML is in DOM
+document.addEventListener('DOMContentLoaded', function() {
   var modal = document.getElementById('newNoteModal');
   if (!modal) return;
   modal.addEventListener('show.bs.modal', function() {
@@ -191,7 +191,7 @@ document.addEventListener('click', function(e) {
     var errEl = document.getElementById('nnError');
     if (!title) { errEl.textContent = 'Title is required.'; errEl.style.display = ''; return; }
     if (!body)  { errEl.textContent = 'Note body is required.'; errEl.style.display = ''; return; }
-    var btn = this; btn.disabled = true; btn.textContent = 'Saving\u2026';
+    var btn = this; btn.disabled = true; btn.textContent = 'Saving…';
     var fd = new FormData();
     fd.append('title', title);
     fd.append('body', body);
@@ -210,7 +210,7 @@ document.addEventListener('click', function(e) {
       })
       .catch(function(){ btn.disabled = false; btn.textContent = 'Save Note'; });
   });
-})();
+});
 </script>
 
 <!-- New Note Modal -->
@@ -230,7 +230,7 @@ document.addEventListener('click', function(e) {
         <div class="mb-3">
           <label class="form-label">Note <span class="text-danger">*</span></label>
           <textarea id="nnBody" class="form-control" rows="5"
-                    placeholder="Write anything\u2014key takeaways, thoughts, quotes\u2026"
+                    placeholder="Write anything — key takeaways, thoughts, quotes…"
                     autocapitalize="sentences" autocorrect="on" spellcheck="true"
                     style="resize:vertical;"></textarea>
         </div>

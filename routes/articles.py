@@ -273,7 +273,7 @@ def create_article():
         pdf_path = f"uploads/{saved}"
 
     if not title or not summary:
-        flash("Title and summary are required.", "danger")
+        flash("Title is required.", "danger")
         return redirect(url_for("articles.new_article"))
     if not url and not pdf_path:
         flash("Provide a URL or upload a PDF.", "danger")
