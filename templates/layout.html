@@ -91,7 +91,6 @@
         <div class="d-flex flex-wrap gap-3">
           <a href="{{ url_for('main.index') }}" class="text-muted text-decoration-none">Hub</a>
           <a href="{{ url_for('tasks.list_tasks') }}" class="text-muted text-decoration-none">All Tasks</a>
-          <a href="{{ url_for('tasks.kanban') }}" class="text-muted text-decoration-none">Kanban</a>
           <a href="{{ url_for('lists.list_lists') }}" class="text-muted text-decoration-none">My Lists</a>
           <a href="{{ url_for('articles.reading_log') }}" class="text-muted text-decoration-none">Reading Log</a>
           <a href="{{ url_for('articles.browse_articles') }}" class="text-muted text-decoration-none">Article Library</a>
@@ -108,18 +107,26 @@
 
     <!-- Linkify URLs in task name spans -->
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      var urlRe = /(https?:\/\/[^\s<>"]+)/;
-      document.querySelectorAll('.task-name').forEach(function(el) {
-        var m = urlRe.exec(el.textContent);
-        if (!m) return;
-        var a = document.createElement('a');
-        a.href = m[1]; a.target = '_blank'; a.rel = 'noopener';
-        a.innerHTML = ' &#128279;'; a.style.fontSize = '.85em';
-        a.addEventListener('click', function(e) { e.stopPropagation(); });
-        el.appendChild(a);
+    function linkifyTaskNames(root) {
+      function escH(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+      (root || document).querySelectorAll('.task-name').forEach(function(el) {
+        if (el.dataset.linkified) return;
+        var txt = el.textContent;
+        if (!/https?:\/\//.test(txt)) return;
+        el.dataset.linkified = '1';
+        var urlRe = /(https?:\/\/[^\s<>"]+)/g;
+        var html = ''; var last = 0; var m;
+        while ((m = urlRe.exec(txt)) !== null) {
+          html += escH(txt.slice(last, m.index));
+          var url = m[1];
+          html += '<a href="'+escH(url)+'" target="_blank" rel="noopener" style="word-break:break-all;" onclick="event.stopPropagation();">'+escH(url)+'</a>';
+          last = m.index + url.length;
+        }
+        html += escH(txt.slice(last));
+        el.innerHTML = html;
       });
-    });
+    }
+    document.addEventListener('DOMContentLoaded', function() { linkifyTaskNames(document); });
     </script>
 
     <!-- Productivity Timer (persists across page loads via sessionStorage) -->

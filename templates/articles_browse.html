@@ -98,19 +98,3 @@
 
 </div>
 {% endblock %}
-            {% endif %}
-          </div>
-        </div>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  {% else %}
-  <div class="text-center text-muted py-5">
-    <p class="mb-1">No articles found.</p>
-    {% if q or cat %}<a href="{{ url_for('articles.browse_articles') }}" class="small">Clear filters</a>{% endif %}
-  </div>
-  {% endif %}
-
-</div>
-{% endblock %}
