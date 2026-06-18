@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 from models import db
 from models.article import Article, ArticleReaction
 from models.task import Task
-from datetime import date
+from datetime import date, timedelta
 
 bp = Blueprint("articles", __name__)
 
@@ -71,6 +71,30 @@ def get_featured_article(user_id):
     return max(candidates, key=score)
 
 
+def _check_nudge():
+    """After every 3 article interactions (react or skip), nudge if tasks are due today/this week."""
+    today_str = date.today().isoformat()
+    week_end_str = (date.today() + timedelta(days=7)).isoformat()
+    if session.get("interact_date") != today_str:
+        session["interact_date"] = today_str
+        session["interact_count"] = 0
+
+    session["interact_count"] = session.get("interact_count", 0) + 1
+    session.modified = True
+
+    if session["interact_count"] >= 3:
+        session["interact_count"] = 0
+        has_due = Task.query.filter(
+            Task.user_id == current_user.id,
+            Task.status != "completed",
+            Task.due_date.isnot(None),
+            Task.due_date <= week_end_str,
+        ).first()
+        if has_due:
+            session["show_work_modal"] = True
+        session.modified = True
+
+
 @bp.post("/articles/<int:aid>/react")
 @login_required
 def react(aid: int):
@@ -97,6 +121,9 @@ def react(aid: int):
 
     if reaction == "liked":
         flash("Saved to your reading log.", "success")
+
+    _check_nudge()
+
     redirect_to = request.form.get("redirect_to", "").strip()
     if redirect_to and redirect_to.startswith("/") and not redirect_to.startswith("//"):
         return redirect(redirect_to)
@@ -109,28 +136,15 @@ def skip(aid: int):
     today = date.today().isoformat()
     if session.get("skip_date") != today:
         session["skip_date"] = today
-        session["skip_count"] = 0
         session["skipped_ids"] = []
 
-    # Add to session skip list
     skipped = list(session.get("skipped_ids", []))
     if aid not in skipped:
         skipped.append(aid)
     session["skipped_ids"] = skipped
-
-    count = session.get("skip_count", 0) + 1
-    session["skip_count"] = count
     session.modified = True
 
-    # Trigger work modal at every 3rd skip only when tasks are incomplete
-    if count >= 3:
-        has_incomplete = Task.query.filter_by(user_id=current_user.id).filter(
-            Task.status != "completed"
-        ).first()
-        if has_incomplete:
-            session["show_work_modal"] = True
-        session["skip_count"] = 0  # reset so next 3 skips can trigger again
-        session.modified = True
+    _check_nudge()
 
     return redirect(url_for("main.index"))
 
