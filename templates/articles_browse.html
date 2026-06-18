@@ -7,7 +7,10 @@
       <h2 class="mb-0" style="font-size:1.4em; font-weight:600; color:#2c3e50;">Article Library</h2>
       <p class="text-muted small mb-0">Browse all articles. Save ones you want to read.</p>
     </div>
-    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('articles.new_article') }}">+ Add Article</a>
+    <div class="d-flex gap-2">
+      <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#newNoteModal">&#128221; Add Note</button>
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('articles.new_article') }}">+ Add Article</a>
+    </div>
   </div>
 
   <form class="d-flex flex-wrap gap-2 mb-4" method="get" action="{{ url_for('articles.browse_articles') }}">
@@ -33,10 +36,40 @@
     </h6>
     <div class="d-flex flex-column gap-2">
       {% for article in articles %}
+      {% set is_note = article.content_type == 'Note' %}
       {% set is_saved = article.id in saved_ids %}
       {% set is_dismissed = article.id in reacted_ids and not is_saved %}
-      <div class="card border-0 shadow-sm {% if is_saved %}bg-light{% endif %}">
+      <div class="card border-0 shadow-sm {% if is_saved and not is_note %}bg-light{% endif %}">
         <div class="card-body py-2 px-3">
+          {% if is_note %}
+          <!-- Freestanding note card -->
+          <div class="d-flex justify-content-between align-items-start gap-2">
+            <div style="flex:1; min-width:0;">
+              <div class="fw-semibold" style="font-size:.92em;">{{ article.title }}</div>
+              <div class="collapse" id="noteBody{{ article.id }}">
+                <p class="text-secondary mt-1 mb-1" style="font-size:.85em; white-space:pre-wrap; line-height:1.5;">{{ article.summary }}</p>
+                {% if article.tag_list() %}
+                <div class="mb-1">
+                  {% for tag in article.tag_list() %}
+                    <span class="badge bg-light text-secondary border me-1" style="font-size:.68em;">{{ tag }}</span>
+                  {% endfor %}
+                </div>
+                {% endif %}
+              </div>
+              <button class="btn btn-link p-0 text-muted" style="font-size:.78em; text-decoration:none;"
+                      type="button" data-bs-toggle="collapse" data-bs-target="#noteBody{{ article.id }}">
+                <span class="note-expand-lbl">&#9656; expand</span>
+              </button>
+            </div>
+            <div class="d-flex flex-column align-items-end gap-1 flex-shrink-0">
+              <form method="post" action="{{ url_for('articles.delete_article', aid=article.id) }}"
+                    onsubmit="return confirm('Delete this note?');">
+                <button class="btn btn-link btn-sm text-danger p-0" style="font-size:.72em;">Delete</button>
+              </form>
+            </div>
+          </div>
+          {% else %}
+          <!-- Regular article card -->
           <div class="d-flex justify-content-between align-items-start gap-3">
             <div style="flex:1; min-width:0;">
               {% if article.author %}
@@ -58,6 +91,24 @@
                 {% for tag in article.tag_list() %}
                   <span class="badge bg-light text-secondary border me-1" style="font-size:.68em;">{{ tag }}</span>
                 {% endfor %}
+              </div>
+              <!-- Per-article notes -->
+              <div class="mt-2">
+                <button class="btn btn-link p-0 text-muted" style="font-size:.78em; text-decoration:none;"
+                        type="button" data-bs-toggle="collapse"
+                        data-bs-target="#notes{{ article.id }}">&#128221; Notes</button>
+                <div class="collapse{% if article.notes %} show{% endif %}" id="notes{{ article.id }}">
+                  <textarea class="form-control form-control-sm mt-1 article-notes"
+                            data-aid="{{ article.id }}"
+                            rows="3" placeholder="Your thoughts, highlights, key takeaways…"
+                            style="font-size:.82em; resize:vertical;">{{ article.notes or '' }}</textarea>
+                  <div class="d-flex align-items-center gap-2 mt-1">
+                    <button class="btn btn-sm btn-outline-secondary save-notes-btn" data-aid="{{ article.id }}"
+                            style="font-size:.75em; padding:.2rem .55rem;">Save</button>
+                    <span class="notes-saved-msg text-success" data-aid="{{ article.id }}"
+                          style="font-size:.75em; display:none;">&#10003; Saved</span>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="d-flex flex-column align-items-end gap-1 flex-shrink-0">
@@ -83,6 +134,7 @@
               {% endif %}
             </div>
           </div>
+          {% endif %}
         </div>
       </div>
       {% endfor %}
@@ -97,4 +149,114 @@
   {% endif %}
 
 </div>
+
+<script>
+// Per-article inline notes save
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('.save-notes-btn');
+  if (!btn) return;
+  var aid = btn.dataset.aid;
+  var ta = document.querySelector('.article-notes[data-aid="'+aid+'"]');
+  if (!ta) return;
+  btn.disabled = true;
+  var fd = new FormData(); fd.append('notes', ta.value);
+  fetch('/articles/'+aid+'/notes-json', {method:'POST', body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      btn.disabled = false;
+      if (data.ok) {
+        var msg = document.querySelector('.notes-saved-msg[data-aid="'+aid+'"]');
+        if (msg) { msg.style.display=''; setTimeout(function(){ msg.style.display='none'; }, 2000); }
+      }
+    })
+    .catch(function(){ btn.disabled = false; });
+});
+
+// New Note modal
+(function() {
+  var modal = document.getElementById('newNoteModal');
+  if (!modal) return;
+  modal.addEventListener('show.bs.modal', function() {
+    document.getElementById('nnTitle').value = '';
+    document.getElementById('nnBody').value = '';
+    document.getElementById('nnError').style.display = 'none';
+    modal.querySelectorAll('input[name="note_tags"]').forEach(function(cb){ cb.checked = false; });
+  });
+  modal.addEventListener('shown.bs.modal', function() {
+    document.getElementById('nnTitle').focus();
+  });
+  document.getElementById('nnSubmit').addEventListener('click', function() {
+    var title = document.getElementById('nnTitle').value.trim();
+    var body  = document.getElementById('nnBody').value.trim();
+    var errEl = document.getElementById('nnError');
+    if (!title) { errEl.textContent = 'Title is required.'; errEl.style.display = ''; return; }
+    if (!body)  { errEl.textContent = 'Note body is required.'; errEl.style.display = ''; return; }
+    var btn = this; btn.disabled = true; btn.textContent = 'Saving\u2026';
+    var fd = new FormData();
+    fd.append('title', title);
+    fd.append('body', body);
+    modal.querySelectorAll('input[name="note_tags"]:checked').forEach(function(cb){ fd.append('tags', cb.value); });
+    fetch('/articles/create-note-json', {method:'POST', body:fd})
+      .then(function(r){ return r.json(); })
+      .then(function(data) {
+        btn.disabled = false; btn.textContent = 'Save Note';
+        if (data.ok) {
+          bootstrap.Modal.getInstance(modal).hide();
+          location.reload();
+        } else {
+          errEl.textContent = data.error || 'Something went wrong.';
+          errEl.style.display = '';
+        }
+      })
+      .catch(function(){ btn.disabled = false; btn.textContent = 'Save Note'; });
+  });
+})();
+</script>
+
+<!-- New Note Modal -->
+<div class="modal fade" id="newNoteModal" tabindex="-1" aria-modal="true" role="dialog">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-1">
+        <h5 class="modal-title">&#128221; New Note</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="nnError" class="alert alert-danger py-1 px-2 small mb-2" style="display:none;"></div>
+        <div class="mb-3">
+          <label class="form-label">Title <span class="text-danger">*</span></label>
+          <input id="nnTitle" class="form-control" maxlength="200" autocapitalize="sentences" autocorrect="on">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Note <span class="text-danger">*</span></label>
+          <textarea id="nnBody" class="form-control" rows="5"
+                    placeholder="Write anything\u2014key takeaways, thoughts, quotes\u2026"
+                    autocapitalize="sentences" autocorrect="on" spellcheck="true"
+                    style="resize:vertical;"></textarea>
+        </div>
+        <div>
+          <label class="form-label small text-muted">Tags <span class="fw-normal">(optional)</span></label>
+          <div class="row g-1" style="font-size:.82em;">
+            {% set tag_options = ['habits','psychology','medicine','leadership','management',
+               'productivity','strategy','decision-making','wellbeing','learning',
+               'communication','creativity','technology','finance','systems','research'] %}
+            {% for tag in tag_options %}
+            <div class="col-6 col-md-4">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="note_tags" value="{{ tag }}" id="ntag_{{ tag }}">
+                <label class="form-check-label" for="ntag_{{ tag }}">{{ tag }}</label>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-1">
+        <button id="nnSubmit" class="btn btn-primary btn-sm">Save Note</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}

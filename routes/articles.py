@@ -184,13 +184,17 @@ def browse_articles():
     from collections import defaultdict
     grouped = defaultdict(list)
     for a in all_articles:
-        if a.id in saved_ids:
+        if a.content_type == "Note":
+            grouped["\U0001f4dd Notes"].append(a)
+        elif a.id in saved_ids:
             grouped["\u2713 Read"].append(a)
         else:
             grouped[a.category or "Uncategorized"].append(a)
-    sorted_cats = sorted([k for k in grouped if k != "\u2713 Read"])
-    if "\u2713 Read" in grouped:
-        sorted_cats.append("\u2713 Read")
+    # Notes first, then alphabetical categories, then Read at end
+    special = ["\U0001f4dd Notes", "\u2713 Read"]
+    sorted_cats = (["\U0001f4dd Notes"] if "\U0001f4dd Notes" in grouped else []) + \
+                  sorted([k for k in grouped if k not in special]) + \
+                  (["\u2713 Read"] if "\u2713 Read" in grouped else [])
     grouped_articles = [(c, grouped[c]) for c in sorted_cats]
 
     return render_template(
@@ -209,6 +213,30 @@ def browse_articles():
 @login_required
 def new_article():
     return render_template("articles_add.html", categories=ARTICLE_CATEGORIES)
+
+
+@bp.post("/articles/create-note-json")
+@login_required
+def create_note():
+    title = request.form.get("title", "").strip()
+    body  = request.form.get("body", "").strip()
+    tags_list = request.form.getlist("tags")
+    tags = ", ".join(t.strip() for t in tags_list if t.strip())
+    if not title:
+        return jsonify(ok=False, error="Title is required.")
+    if not body:
+        return jsonify(ok=False, error="Note body is required.")
+    a = Article(
+        title=title,
+        summary=body,
+        url="",
+        content_type="Note",
+        tags=tags,
+        added_by=current_user.id,
+    )
+    db.session.add(a)
+    db.session.commit()
+    return jsonify(ok=True)
 
 
 @bp.post("/articles/add")
@@ -263,6 +291,17 @@ def create_article():
     return redirect(url_for("articles.browse_articles"))
 
 
+@bp.post("/articles/<int:aid>/notes-json")
+@login_required
+def save_notes(aid: int):
+    a = Article.query.filter_by(id=aid, added_by=current_user.id).first()
+    if not a:
+        return jsonify(ok=False, error="Not found.")
+    a.notes = request.form.get("notes", "").strip() or None
+    db.session.commit()
+    return jsonify(ok=True)
+
+
 @bp.post("/articles/<int:aid>/mark-read")
 @login_required
 def mark_read(aid: int):
@@ -274,6 +313,17 @@ def mark_read(aid: int):
         r.read_at = datetime.utcnow()
         db.session.commit()
     return redirect(url_for("articles.reading_log"))
+
+
+@bp.post("/articles/<int:aid>/delete")
+@login_required
+def delete_article(aid: int):
+    a = Article.query.filter_by(id=aid, added_by=current_user.id).first()
+    if a:
+        ArticleReaction.query.filter_by(article_id=aid).delete()
+        db.session.delete(a)
+        db.session.commit()
+    return redirect(url_for("articles.browse_articles"))
 
 
 @bp.post("/articles/<int:aid>/unmark-read")

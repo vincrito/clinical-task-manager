@@ -17,6 +17,7 @@ class Article(db.Model):
     category = db.Column(db.String(100), nullable=True)
     pdf_path = db.Column(db.String(300), nullable=True)
     added_by = db.Column(db.Integer, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(EASTERN).replace(tzinfo=None))
 
     __table_args__ = (

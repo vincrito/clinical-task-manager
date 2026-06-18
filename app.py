@@ -114,4 +114,8 @@ if __name__ == "__main__":
             with db.engine.connect() as conn:
                 conn.execute(text("ALTER TABLE users ADD COLUMN interests VARCHAR(500) NOT NULL DEFAULT ''"))
                 conn.commit()
+        if "notes" not in existing_article_cols:
+            with db.engine.connect() as conn:
+                conn.execute(text("ALTER TABLE articles ADD COLUMN notes TEXT"))
+                conn.commit()
     app.run(host="127.0.0.1", port=8000, debug=True)     # run on port 8000
