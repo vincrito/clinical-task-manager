@@ -125,7 +125,7 @@
                 {{ list_names.get(group.grouper, 'List') }}
                 <span class="text-muted ms-1" style="font-weight:400;">({{ group.list|length }})</span>
               </button>
-              <div class="collapse show" id="openGrp{{ loop.index }}">
+              <div class="collapse" id="openGrp{{ loop.index }}">
                 <ul class="list-unstyled mb-0 ms-3">
                   {% for t in group.list %}
                   <li class="d-flex align-items-center gap-2 py-1 border-bottom task-row" data-task-id="{{ t.id }}" data-list-id="{{ t.list_id }}" style="font-size:.88em;">
