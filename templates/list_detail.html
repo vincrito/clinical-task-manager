@@ -7,7 +7,7 @@
       <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:{{ lst.color }};flex-shrink:0;"></span>
       {{ lst.name }}
     </h2>
-    <a class="btn btn-sm btn-primary" href="{{ url_for('tasks.new_task') }}?list_id={{ lst.id }}">+ New Task</a>
+    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#newTaskModal">+ New Task</button>
   </div>
 
   {% if lst.description %}
@@ -67,12 +67,49 @@
   {% else %}
   <div class="text-center text-muted py-5">
     <p class="mb-1">No tasks yet.</p>
-    <a href="{{ url_for('tasks.new_task') }}?list_id={{ lst.id }}" class="small">Add a task</a>
+    <button class="btn btn-sm btn-link p-0" data-bs-toggle="modal" data-bs-target="#newTaskModal">Add a task</button>
   </div>
   {% endif %}
 
   <a class="btn btn-outline-secondary btn-sm mt-2" href="{{ url_for('lists.list_lists') }}">← All Lists</a>
 
+</div>
+
+<!-- New Task Modal -->
+<div class="modal fade" id="newTaskModal" tabindex="-1" aria-modal="true" role="dialog">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-1">
+        <h5 class="modal-title">New Task</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="newTaskError" class="alert alert-danger py-1 px-2 small mb-2" style="display:none;"></div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Description <span class="text-danger">*</span></label>
+          <input id="newTaskDesc" class="form-control" required autocapitalize="sentences" autocorrect="on" spellcheck="true">
+        </div>
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label">Due date</label>
+            <input id="newTaskDue" type="date" class="form-control">
+          </div>
+          <div class="col-6">
+            <label class="form-label">Priority</label>
+            <select id="newTaskPriority" class="form-select">
+              <option value="low" selected>Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-1">
+        <button id="newTaskSaveBtn" class="btn btn-primary btn-sm">Add Task</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Task detail modal -->
@@ -247,5 +284,40 @@ document.addEventListener('click',function(e){
     .catch(function(){btn.disabled=false;});
 });
 document.querySelectorAll('[data-bs-toggle="popover"]').forEach(function(el){new bootstrap.Popover(el, {sanitize:false});});
+
+document.getElementById('newTaskModal').addEventListener('show.bs.modal', function() {
+  document.getElementById('newTaskDesc').value = '';
+  document.getElementById('newTaskDue').value = '';
+  document.getElementById('newTaskPriority').value = 'low';
+  document.getElementById('newTaskError').style.display = 'none';
+});
+
+document.getElementById('newTaskSaveBtn').addEventListener('click', function() {
+  var desc = document.getElementById('newTaskDesc').value.trim();
+  var due  = document.getElementById('newTaskDue').value;
+  var pri  = document.getElementById('newTaskPriority').value;
+  var errEl = document.getElementById('newTaskError');
+  if (!desc) { errEl.textContent = 'Description is required.'; errEl.style.display = ''; return; }
+  errEl.style.display = 'none';
+  var btn = this; btn.disabled = true;
+  var fd = new FormData();
+  fd.append('description', desc);
+  fd.append('due_date', due);
+  fd.append('priority', pri);
+  fd.append('list_id', String(CURRENT_LIST_ID));
+  fetch('/tasks/quick-add', {method: 'POST', body: fd})
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.disabled = false;
+      if (data.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('newTaskModal')).hide();
+        location.reload();
+      } else {
+        errEl.textContent = data.error || 'Could not add task.';
+        errEl.style.display = '';
+      }
+    })
+    .catch(function() { btn.disabled = false; });
+});
 </script>
 {% endblock %}

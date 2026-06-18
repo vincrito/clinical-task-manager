@@ -152,7 +152,9 @@
               <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:{{ list_colors.get(t.list_id, '#888') }};flex-shrink:0;"></span>
               <span class="task-name flex-grow-1" style="cursor:pointer;text-decoration:underline dotted #aaa;" onclick="openTaskDetail({{ t.id }})">{{ t.description }}</span>{% if comment_counts.get(t.id, 0) > 0 %}<span class="comment-bubble" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-placement="top" data-bs-content="{{ comment_latest.get(t.id,'') }}" tabindex="0" style="color:#aaa;font-size:.78em;cursor:default;" onclick="openTaskDetail({{ t.id }})" title="has comments">&#128172;</span>{% endif %}
               <div class="d-flex align-items-center gap-2 ms-auto flex-shrink-0">
-                <span class="badge text-bg-secondary">Low</span>
+                {% if t.priority == 'high' %}<span class="badge text-bg-danger">High</span>
+                {% elif t.priority == 'low' %}<span class="badge text-bg-secondary">Low</span>
+                {% else %}<span class="badge text-bg-warning">Med</span>{% endif %}
                 <button class="btn btn-sm btn-link text-success complete-btn p-0 px-1" title="Mark done">&#10003;</button>
               </div>
             </li>
@@ -253,7 +255,6 @@
         <div class="mb-3">
           <label class="form-label">Description</label>
           <input id="quickAddDesc" class="form-control" required
-                 list="taskDescSuggestions"
                  autocapitalize="sentences" autocorrect="on" spellcheck="true">
         </div>
         <div class="row g-2">
@@ -292,7 +293,7 @@
         <div class="row g-3 mb-3">
           <div class="col-12">
             <label class="form-label fw-semibold">Description</label>
-            <textarea id="detailDesc" class="form-control" rows="2" list="taskDescSuggestions" autocapitalize="sentences" autocorrect="on" spellcheck="true"></textarea>
+            <textarea id="detailDesc" class="form-control" rows="2" autocapitalize="sentences" autocorrect="on" spellcheck="true"></textarea>
           </div>
           <div class="col-6 col-md-3">
             <label class="form-label">Due date</label>
@@ -336,26 +337,10 @@
   </div>
 </div>
 
-<datalist id="taskDescSuggestions"></datalist>
-
 <script>
 var LIST_COLOR_MAP = {{ list_colors | tojson }};
 document.addEventListener("DOMContentLoaded",function(){
   document.querySelectorAll('[data-bs-toggle="popover"]').forEach(function(el){new bootstrap.Popover(el,{sanitize:false});});
-  // Load task description suggestions for autocomplete datalists
-  fetch('{{ url_for("tasks.suggestions_json") }}')
-    .then(function(r){ return r.json(); })
-    .then(function(data) {
-      if (!data.ok) return;
-      var dl = document.getElementById('taskDescSuggestions');
-      if (!dl) return;
-      data.suggestions.forEach(function(s) {
-        var opt = document.createElement('option');
-        opt.value = s;
-        dl.appendChild(opt);
-      });
-    })
-    .catch(function() {});
 });
 var TODAY    = "{{ today }}";
 var WEEK_END = "{{ week_end }}";

@@ -16,26 +16,15 @@
     <!-- navigation bar -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
   <div class="container d-flex align-items-center">
-    <a class="navbar-brand me-3" href="{{ url_for('main.index') }}">PTM</a>
-    {% if navbar_stats %}
-    <div class="d-flex align-items-center gap-2 mx-auto">
-      <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#e74c3c;color:#fff;font-size:.75em;font-weight:700;" title="Pending">{{ navbar_stats.pending }}</span>
-      <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#e67e22;color:#fff;font-size:.75em;font-weight:700;" title="In Progress">{{ navbar_stats.in_progress }}</span>
-      <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#27ae60;color:#fff;font-size:.75em;font-weight:700;" title="Completed">{{ navbar_stats.completed }}</span>
-    </div>
-    {% else %}
-    <div class="mx-auto"></div>
-    {% endif %}
-
+    <a class="navbar-brand me-2" href="{{ url_for('main.index') }}">PTM</a>
     <!-- Productivity Timer -->
     {% if current_user.is_authenticated %}
-    <div id="ptmTimer" class="d-flex align-items-center gap-2 me-2" style="font-size:.8em;">
-      <span id="timerDisplay" class="text-white fw-semibold" style="min-width:3.5em; text-align:right; display:none; cursor:pointer;" title="Click to stop" onclick="timerStop()"></span>
+    <div id="ptmTimer" class="d-flex align-items-center me-3" style="font-size:.8em;">
       <div class="dropdown">
         <button class="btn btn-sm btn-outline-light dropdown-toggle" style="font-size:.78em; padding:.2rem .6rem;" type="button" data-bs-toggle="dropdown" aria-expanded="false" id="timerDropBtn">
           &#9200; Timer
         </button>
-        <ul class="dropdown-menu dropdown-menu-end" style="min-width:8rem;">
+        <ul class="dropdown-menu dropdown-menu-start" style="min-width:8rem;">
           <li><button class="dropdown-item" onclick="timerStart(15)">15 min</button></li>
           <li><button class="dropdown-item" onclick="timerStart(30)">30 min</button></li>
           <li><button class="dropdown-item" onclick="timerStart(60)">60 min</button></li>
@@ -45,6 +34,15 @@
         </ul>
       </div>
     </div>
+    {% endif %}
+    {% if navbar_stats %}
+    <div class="d-flex align-items-center gap-2 mx-auto">
+      <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#e74c3c;color:#fff;font-size:.75em;font-weight:700;" title="Pending">{{ navbar_stats.pending }}</span>
+      <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#e67e22;color:#fff;font-size:.75em;font-weight:700;" title="In Progress">{{ navbar_stats.in_progress }}</span>
+      <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#27ae60;color:#fff;font-size:.75em;font-weight:700;" title="Completed">{{ navbar_stats.completed }}</span>
+    </div>
+    {% else %}
+    <div class="mx-auto"></div>
     {% endif %}
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
@@ -95,24 +93,22 @@
     (function() {
       var TICK_KEY  = 'ptm_timer_end';   // epoch-ms when timer ends
       var _interval = null;
-      var dispEl    = document.getElementById('timerDisplay');
       var dropBtn   = document.getElementById('timerDropBtn');
 
       function pad(n) { return n < 10 ? '0'+n : n; }
 
       function render(secsLeft) {
-        if (!dispEl) return;
         if (secsLeft <= 0) {
           timerStop();
           return;
         }
         var m = Math.floor(secsLeft / 60);
         var s = secsLeft % 60;
-        dispEl.textContent = pad(m) + ':' + pad(s);
-        dispEl.style.display = '';
-        // turn red in last 60 s
-        dispEl.style.color = secsLeft <= 60 ? '#ff6b6b' : '#fff';
-        if (dropBtn) dropBtn.textContent = '\u23F0 ' + pad(m) + ':' + pad(s);
+        var label = pad(m) + ':' + pad(s);
+        if (dropBtn) {
+          dropBtn.textContent = '\u23F0 ' + label;
+          dropBtn.style.color = secsLeft <= 60 ? '#ff6b6b' : '';
+        }
       }
 
       function tick() {
@@ -133,10 +129,7 @@
       window.timerStop = function() {
         clearInterval(_interval);
         sessionStorage.removeItem(TICK_KEY);
-        if (dispEl) { dispEl.style.display = 'none'; }
-        if (dropBtn) dropBtn.textContent = '\u23F0 Timer';
-        // Play a subtle notification if browser supports it
-        try { new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAA==').play(); } catch(e) {}
+        if (dropBtn) { dropBtn.textContent = '\u23F0 Timer'; dropBtn.style.color = ''; }
       };
 
       // Resume timer if page was navigated while running
