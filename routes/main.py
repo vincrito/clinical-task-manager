@@ -1,6 +1,9 @@
 from flask import Blueprint, render_template, session
 from flask_login import current_user
-from datetime import date, timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+EASTERN = ZoneInfo("America/New_York")
 
 bp = Blueprint("main", __name__)
 
@@ -12,12 +15,14 @@ def index():
     overdue = []
     due_today = []
     due_this_week = []
+    open_tasks = []
     list_panels = []
     list_colors = {}
     comment_counts = {}
     comment_latest = {}
-    today = date.today().isoformat()
-    week_end = (date.today() + timedelta(days=7)).isoformat()
+    _today_dt = datetime.now(EASTERN).date()
+    today = _today_dt.isoformat()
+    week_end = (_today_dt + timedelta(days=7)).isoformat()
 
     if current_user.is_authenticated:
         from routes.articles import get_featured_article
@@ -59,14 +64,25 @@ def index():
             .all()
         )
 
-        # Due today: not completed, due_date == today OR no due date set
-        from sqlalchemy import or_
+        # Due today: not completed, due_date == today only
         due_today = (
             Task.query
             .filter(
                 Task.user_id == uid,
                 Task.status != "completed",
-                or_(Task.due_date == today, Task.due_date.is_(None)),
+                Task.due_date == today,
+            )
+            .order_by(priority_order, Task.list_id)
+            .all()
+        )
+
+        # Open Tasks: not completed, no due date
+        open_tasks = (
+            Task.query
+            .filter(
+                Task.user_id == uid,
+                Task.status != "completed",
+                Task.due_date.is_(None),
             )
             .order_by(priority_order, Task.list_id)
             .all()
@@ -131,7 +147,7 @@ def index():
 
         # Comment counts for dashboard task rows
         from models.comment import Comment
-        all_dash_ids = [t.id for t in overdue + due_today + due_this_week]
+        all_dash_ids = [t.id for t in overdue + due_today + due_this_week + open_tasks]
         dash_cmap = {}
         if all_dash_ids:
             for c in Comment.query.filter(Comment.task_id.in_(all_dash_ids)).order_by(Comment.created_at.desc()).all():
@@ -147,6 +163,7 @@ def index():
         overdue=overdue,
         due_today=due_today,
         due_this_week=due_this_week,
+        open_tasks=open_tasks,
         list_panels=list_panels,
         list_colors=list_colors,
         comment_counts=comment_counts,

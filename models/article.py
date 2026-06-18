@@ -13,6 +13,7 @@ class Article(db.Model):
     url = db.Column(db.String(500), nullable=False, default="")
     author = db.Column(db.String(100), nullable=True)
     tags = db.Column(db.String(300), nullable=False, default="")
+    content_type = db.Column(db.String(60), nullable=False, default="Article")  # e.g. TED Talk, Essay, Blog Post
     category = db.Column(db.String(100), nullable=True)
     pdf_path = db.Column(db.String(300), nullable=True)
     added_by = db.Column(db.Integer, nullable=True)

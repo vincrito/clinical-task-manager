@@ -6,7 +6,10 @@ from models.list import TaskList
 from models.comment import Comment
 from sqlalchemy import or_
 import re
-from datetime import datetime, date
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+EASTERN = ZoneInfo("America/New_York")
 
 bp = Blueprint("tasks", __name__)
 
@@ -29,6 +32,7 @@ def quick_add():
     if priority not in ALLOWED_PRIORITIES:
         priority = "medium"
 
+    today_eastern = datetime.now(EASTERN).date()
     due_date = None
     if due_date_raw:
         parsed = None
@@ -40,9 +44,13 @@ def quick_add():
                 pass
         if not parsed:
             return jsonify(ok=False, error="Invalid due date format.")
-        if parsed.date() < date.today():
+        if parsed.date() < today_eastern:
             return jsonify(ok=False, error="Due date cannot be in the past.")
         due_date = parsed.strftime("%Y-%m-%d")
+
+    # No due date → auto low priority
+    if not due_date:
+        priority = "low"
 
     t = Task(user_id=current_user.id, list_id=lst.id,
              description=description, due_date=due_date,
@@ -146,6 +154,28 @@ def comment_json(tid: int):
         "body": c.body,
         "created_at": c.created_at.strftime("%m/%d/%y %I:%M%p") if c.created_at else "",
     })
+
+@bp.get("/tasks/suggestions-json")
+@login_required
+def suggestions_json():
+    """Return up to 50 recent distinct task descriptions for datalist autocomplete."""
+    rows = (
+        db.session.query(Task.description)
+        .filter(Task.user_id == current_user.id)
+        .order_by(Task.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    seen = set()
+    suggestions = []
+    for (desc,) in rows:
+        key = desc.lower()
+        if key not in seen:
+            seen.add(key)
+            suggestions.append(desc)
+        if len(suggestions) >= 50:
+            break
+    return jsonify(ok=True, suggestions=suggestions)
 
 @bp.get("/tasks")
 @login_required

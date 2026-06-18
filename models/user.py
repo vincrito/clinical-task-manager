@@ -13,6 +13,7 @@ class User(UserMixin, db.Model):           # SQLAlchemy model + Flask-Login mixi
     id = db.Column(db.Integer, primary_key=True)                         # primary key     # id column
     username = db.Column(db.String(80), unique=True, nullable=False)     # unique login    # username column
     password_hash = db.Column(db.String(255), nullable=False)            # hashed secret   # password_hash column
+    interests = db.Column(db.String(500), nullable=False, default="")    # comma-sep interest tags selected at signup
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(EASTERN).replace(tzinfo=None))
 
 

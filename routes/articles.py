@@ -11,11 +11,14 @@ bp = Blueprint("articles", __name__)
 def get_featured_article(user_id):
     """Return the highest-scored unread/unskipped article for this user.
 
-    Scoring: each tag on a liked article gets +1 weight; each disliked article
-    gives its tags -0.5 (floor 0.1). Unseen tags default to 1.0.
+    Scoring:
+    - Each tag on a liked article gets +1 weight; disliked gives -0.5 (floor 0.1).
+    - User's declared interests get a permanent +2 boost per matching tag.
+    - Unseen tags default to 1.0.
     Session-skipped and permanently reacted articles are excluded.
     Skip tracking resets daily.
     """
+    from models.user import User
     # Daily reset of skip tracking
     today = date.today().isoformat()
     if session.get("skip_date") != today:
@@ -52,6 +55,12 @@ def get_featured_article(user_id):
         delta = 1.0 if r.reaction == "liked" else -0.5
         for tag in a.tag_list():
             tag_weights[tag] = max(0.1, tag_weights.get(tag, 1.0) + delta)
+
+    # Boost tags from user's declared interests
+    user = db.session.get(User, user_id)
+    if user and user.interests:
+        for tag in [t.strip() for t in user.interests.split(",") if t.strip()]:
+            tag_weights[tag] = tag_weights.get(tag, 1.0) + 2.0
 
     def score(article):
         tags = article.tag_list()

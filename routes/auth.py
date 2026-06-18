@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash 
 from flask_login import login_user, logout_user, login_required                  # session helpers (log in/out, protect routes)
 from models import db                                                            # database session (for inserts/commits)
 from models.user import User                                                     # User model (to create/query users)
+from models.list import TaskList                                                  # TaskList model (for default lists)
 
 bp = Blueprint("auth", __name__)                                                 # define an "auth" blueprint
 
@@ -47,9 +48,18 @@ def register_post():
         return redirect(url_for("auth.register"))                                # back to form
 
     # create and persist the new user
-    user = User(username=username)                                               # create user object
+    interests_raw = request.form.getlist("interests")                            # list of selected interest tags
+    interests = ",".join(t.strip() for t in interests_raw if t.strip())          # comma-separated string
+
+    user = User(username=username, interests=interests)                          # create user object
     user.set_password(password)                                                  # hash and store password
     db.session.add(user)                                                         # stage user for insert
+    db.session.flush()                                                           # get user.id before commit
+
+    # create default lists for every new user
+    for list_name in ("Personal", "Work"):
+        db.session.add(TaskList(user_id=user.id, name=list_name))
+
     db.session.commit()                                                          # commit to the database
 
     flash("Account created. Please log in.", "success")                          # confirmation message

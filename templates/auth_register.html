@@ -2,23 +2,56 @@
 
 {% block content %}
 <div class="row justify-content-center">                    <!-- center the form -->
-  <div class="col-md-5">
+  <div class="col-md-6">
     <h2 class="mb-3">Register</h2>                          <!-- page title -->
     <form method="post" action="{{ url_for('auth.register_post') }}"> <!-- POST to register handler -->
       <div class="mb-3">
-        <label class="form-label">Username</label>          <!-- username label -->
-        <input name="username" class="form-control" required> <!-- username input -->
+        <label class="form-label">Username</label>
+        <input name="username" class="form-control" required>
       </div>
       <div class="mb-3">
-        <label class="form-label">Password</label>          <!-- password label -->
-        <input name="password" type="password" class="form-control" required> <!-- password input -->
+        <label class="form-label">Password</label>
+        <input name="password" type="password" class="form-control" required>
       </div>
       <div class="mb-3">
-        <label class="form-label">Confirm Password</label>  <!-- confirm label -->
-        <input name="confirm" type="password" class="form-control" required> <!-- confirm input -->
+        <label class="form-label">Confirm Password</label>
+        <input name="confirm" type="password" class="form-control" required>
       </div>
-      <button class="btn btn-primary">Create account</button> <!-- submit -->
-      <a class="btn btn-link" href="{{ url_for('auth.login') }}">Back to login</a> <!-- back link -->
+
+      <div class="mb-4">
+        <label class="form-label fw-semibold">What topics interest you?
+          <span class="text-muted fw-normal" style="font-size:.85em;">(optional — helps personalise your reading)</span>
+        </label>
+        <div class="row g-2" style="font-size:.9em;">
+          {% set interest_options = [
+            ("medicine",        "Medicine & Healthcare"),
+            ("leadership",      "Leadership & Management"),
+            ("habits",          "Habits & Behaviour"),
+            ("psychology",      "Psychology"),
+            ("productivity",    "Productivity & Focus"),
+            ("wellbeing",       "Wellbeing & Mental Health"),
+            ("strategy",        "Strategy & Entrepreneurship"),
+            ("learning",        "Learning & Education"),
+            ("technology",      "Technology & Digital Health"),
+            ("finance",         "Finance & Economics"),
+            ("creativity",      "Creativity & Innovation"),
+            ("communication",   "Communication & Negotiation"),
+            ("decision-making", "Decision-Making"),
+            ("systems",         "Systems Thinking"),
+          ] %}
+          {% for value, label in interest_options %}
+          <div class="col-6 col-md-4">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="interests" value="{{ value }}" id="int_{{ value }}">
+              <label class="form-check-label" for="int_{{ value }}">{{ label }}</label>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <button class="btn btn-primary">Create account</button>
+      <a class="btn btn-link" href="{{ url_for('auth.login') }}">Back to login</a>
     </form>
   </div>
 </div>

@@ -1,7 +1,7 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from models import db
-from models.list import TaskList
+from models.list import TaskList, LIST_COLORS
 from models.task import Task
 
 bp = Blueprint("lists", __name__)
@@ -50,6 +50,25 @@ def create_list():
     db.session.commit()
     flash("List created.", "success")
     return redirect(url_for("lists.list_lists"))
+
+@bp.post("/lists/new-json")
+@login_required
+def create_list_json():
+    """AJAX endpoint used by the dashboard New List modal."""
+    name = request.form.get("name", "").strip()
+    description = request.form.get("description", "").strip()
+    if not name:
+        return jsonify(ok=False, error="Name is required.")
+    if TaskList.query.filter_by(user_id=current_user.id, name=name).first():
+        return jsonify(ok=False, error="You already have a list with that name.")
+    lst = TaskList(user_id=current_user.id, name=name, description=description or None)
+    db.session.add(lst)
+    db.session.commit()
+    return jsonify(ok=True, list={
+        "id": lst.id,
+        "name": lst.name,
+        "color": LIST_COLORS[(lst.id - 1) % len(LIST_COLORS)],
+    })
 
 @bp.get("/lists/<int:lid>")
 @login_required

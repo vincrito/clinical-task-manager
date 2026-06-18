@@ -8,7 +8,7 @@
   <form method="post" action="{{ url_for('tasks.create_task') }}" class="row g-3" autocomplete="off">
     <div class="col-12">
       <label class="form-label fw-semibold">Description <span class="text-danger">*</span></label>
-      <input name="description" class="form-control" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <input name="description" class="form-control" required autocapitalize="sentences" autocorrect="on" spellcheck="true">
     </div>
 
     <div class="col-md-6">
