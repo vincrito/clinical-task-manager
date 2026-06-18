@@ -62,23 +62,23 @@
             </div>
             <div class="d-flex flex-column align-items-end gap-1 flex-shrink-0">
               {% if is_saved %}
-                <span class="badge bg-success" style="font-size:.72em;">&#10003; Saved</span>
+                <span class="badge bg-success" style="font-size:.72em;">&#10003; Read</span>
                 <form method="post" action="{{ url_for('articles.react', aid=article.id) }}">
                   <input type="hidden" name="reaction" value="disliked">
                   <button class="btn btn-link btn-sm text-danger p-0" style="font-size:.72em;"
-                          onclick="return confirm('Remove from reading log?');">Remove</button>
+                          onclick="return confirm('Mark as unread?');">Unmark</button>
                 </form>
               {% elif is_dismissed %}
                 <span class="text-muted" style="font-size:.72em;">Dismissed</span>
                 <form method="post" action="{{ url_for('articles.react', aid=article.id) }}">
                   <input type="hidden" name="reaction" value="liked">
-                  <button class="btn btn-link btn-sm p-0" style="font-size:.72em;">Re-save</button>
+                  <button class="btn btn-link btn-sm p-0" style="font-size:.72em;">Mark as Read</button>
                 </form>
               {% else %}
                 <form method="post" action="{{ url_for('articles.react', aid=article.id) }}">
                   <input type="hidden" name="reaction" value="liked">
                   <input type="hidden" name="redirect_to" value="{{ url_for('articles.browse_articles', q=q, category=cat) }}">
-                  <button class="btn btn-sm btn-outline-success" style="font-size:.78em; padding:.2rem .55rem;">&#128077; Save</button>
+                  <button class="btn btn-sm btn-outline-secondary" style="font-size:.78em; padding:.2rem .55rem;">Mark as Read</button>
                 </form>
               {% endif %}
             </div>

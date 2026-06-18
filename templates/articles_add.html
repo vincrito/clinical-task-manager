@@ -50,14 +50,28 @@
     </div>
 
     <div class="col-12">
-      <label class="form-label fw-semibold">Tags <span class="text-muted fw-normal small">(comma-separated)</span></label>
-      <input name="tags" class="form-control" placeholder="e.g. habits, medicine, leadership" autocomplete="off">
-      <div class="form-text">Common: habits, psychology, management, medicine, leadership, decision-making, wellbeing</div>
+      <label class="form-label fw-semibold">Tags</label>
+      <div class="row g-2" style="font-size:.88em;">
+        {% set tag_options = [
+          "habits", "psychology", "medicine", "leadership",
+          "management", "productivity", "strategy", "decision-making",
+          "wellbeing", "learning", "communication", "creativity",
+          "technology", "finance", "systems", "research"
+        ] %}
+        {% for tag in tag_options %}
+        <div class="col-6 col-md-3">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="tags" value="{{ tag }}" id="tag_{{ tag }}">
+            <label class="form-check-label" for="tag_{{ tag }}">{{ tag }}</label>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
     </div>
 
     <div class="col-12 mt-2">
-      <button class="btn btn-primary">Add to Reading List</button>
-      <a class="btn btn-link text-muted" href="{{ url_for('articles.reading_log') }}">Cancel</a>
+      <button class="btn btn-primary">Add to Library</button>
+      <a class="btn btn-link text-muted" href="{{ url_for('articles.browse_articles') }}">Cancel</a>
     </div>
 
   </form>

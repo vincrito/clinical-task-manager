@@ -35,10 +35,8 @@ def get_featured_article(user_id):
     # Also exclude session skips
     excluded_ids = reacted_ids + list(session.get("skipped_ids", []))
 
-    # Suggest only from global seeds (added_by IS NULL) and the user's own articles
-    query = Article.query.filter(
-        db.or_(Article.added_by.is_(None), Article.added_by == user_id)
-    )
+    # Suggest only from the user's own articles
+    query = Article.query.filter(Article.added_by == user_id)
     if excluded_ids:
         query = query.filter(~Article.id.in_(excluded_ids))
     candidates = query.all()
@@ -172,10 +170,8 @@ def browse_articles():
         ).all()
     }
 
-    # Show seed articles + user's own
-    query = Article.query.filter(
-        db.or_(Article.added_by.is_(None), Article.added_by == current_user.id)
-    )
+    # Show only user's own articles
+    query = Article.query.filter(Article.added_by == current_user.id)
     if q:
         like = f"%{q}%"
         query = query.filter(
@@ -188,13 +184,13 @@ def browse_articles():
     from collections import defaultdict
     grouped = defaultdict(list)
     for a in all_articles:
-        if a.added_by == current_user.id:
-            grouped["My Articles"].append(a)
+        if a.id in saved_ids:
+            grouped["\u2713 Read"].append(a)
         else:
-            grouped[a.category or "General"].append(a)
-    sorted_cats = sorted([k for k in grouped if k != "My Articles"])
-    if "My Articles" in grouped:
-        sorted_cats.append("My Articles")
+            grouped[a.category or "Uncategorized"].append(a)
+    sorted_cats = sorted([k for k in grouped if k != "\u2713 Read"])
+    if "\u2713 Read" in grouped:
+        sorted_cats.append("\u2713 Read")
     grouped_articles = [(c, grouped[c]) for c in sorted_cats]
 
     return render_template(
@@ -226,7 +222,8 @@ def create_article():
     summary = request.form.get("summary", "").strip()
     url     = request.form.get("url", "").strip()
     author  = request.form.get("author", "").strip()
-    tags    = request.form.get("tags", "").strip()
+    tags_list = request.form.getlist("tags")
+    tags    = ", ".join(t.strip() for t in tags_list if t.strip())
     category = request.form.get("category", "").strip()
 
     pdf_file = request.files.get("pdf")
@@ -263,7 +260,7 @@ def create_article():
     ))
     db.session.commit()
     flash("Article added.", "success")
-    return redirect(url_for("articles.reading_log"))
+    return redirect(url_for("articles.browse_articles"))
 
 
 @bp.post("/articles/<int:aid>/mark-read")

@@ -5,7 +5,6 @@
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h2 class="mb-0" style="font-size:1.4em; font-weight:600; color:#2c3e50;">All Tasks</h2>
     <div class="d-flex gap-2 flex-wrap">
-      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('tasks.kanban') }}">Kanban</a>
       <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('tasks.export_csv') }}">Export CSV</a>
       <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#newTaskModal">+ New Task</button>
     </div>

@@ -114,6 +114,4 @@ if __name__ == "__main__":
             with db.engine.connect() as conn:
                 conn.execute(text("ALTER TABLE users ADD COLUMN interests VARCHAR(500) NOT NULL DEFAULT ''"))
                 conn.commit()
-        from seeds import seed_articles
-        seed_articles(db)
     app.run(host="127.0.0.1", port=8000, debug=True)     # run on port 8000
