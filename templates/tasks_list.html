@@ -4,7 +4,11 @@
 
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h2 class="mb-0" style="font-size:1.4em; font-weight:600; color:#2c3e50;">All Tasks</h2>
-    <a class="btn btn-sm btn-primary" href="{{ url_for('tasks.new_task') }}">+ New Task</a>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('tasks.kanban') }}">Kanban</a>
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('tasks.export_csv') }}">Export CSV</a>
+      <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#newTaskModal">+ New Task</button>
+    </div>
   </div>
 
   <form class="d-flex flex-wrap gap-2 mb-4" method="get" action="{{ url_for('tasks.list_tasks') }}">
@@ -80,7 +84,7 @@
     {% if status or priority or list_id or q %}
       <a href="{{ url_for('tasks.list_tasks') }}" class="small">Clear filters</a>
     {% else %}
-      <a href="{{ url_for('tasks.new_task') }}" class="small">Create your first task</a>
+      <button class="btn btn-link btn-sm p-0" data-bs-toggle="modal" data-bs-target="#newTaskModal">Create your first task</button>
     {% endif %}
   </div>
   {% endif %}
@@ -302,5 +306,137 @@ document.addEventListener('click',function(e){
     .catch(function(){btn.disabled=false;});
 });
 document.querySelectorAll('[data-bs-toggle="popover"]').forEach(function(el){new bootstrap.Popover(el, {sanitize:false});});
+</script>
+
+<!-- New Task Modal -->
+<div class="modal fade" id="newTaskModal" tabindex="-1" aria-modal="true" role="dialog">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-1">
+        <h5 class="modal-title">New Task</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="ntStep1">
+          <div id="ntError" class="alert alert-danger py-1 px-2 small mb-2" style="display:none;"></div>
+          <div class="mb-2">
+            <label class="form-label fw-semibold">Description <span class="text-danger">*</span></label>
+            <input id="ntDesc" class="form-control" required autocapitalize="sentences" autocorrect="on" spellcheck="true">
+          </div>
+          <div class="row g-2">
+            <div class="col-12">
+              <label class="form-label">List <span class="text-danger">*</span></label>
+              <select id="ntList" class="form-select">
+                <option value="">— Select list —</option>
+                {% for lst in all_user_lists %}
+                  <option value="{{ lst.id }}">{{ lst.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Due date</label>
+              <input id="ntDue" type="date" class="form-control">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Priority</label>
+              <select id="ntPriority" class="form-select">
+                <option value="low" selected>Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div id="ntStep2" style="display:none;">
+          <div class="alert alert-success py-1 px-2 small mb-3">&#10003; Task created!</div>
+          <div class="mb-2">
+            <label class="form-label">Add a comment <span class="text-muted fw-normal">(optional)</span></label>
+            <input id="ntComment" class="form-control" placeholder="Notes, context, links…"
+                   autocapitalize="sentences" autocorrect="on" spellcheck="true">
+          </div>
+          <div id="ntCommentFeedback" class="text-success small" style="display:none;"></div>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-1">
+        <button id="ntSubmit" class="btn btn-primary btn-sm">Create</button>
+        <button id="ntCommentBtn" class="btn btn-secondary btn-sm" style="display:none;">Add Comment</button>
+        <button id="ntDoneBtn" class="btn btn-success btn-sm" style="display:none;">Done</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  var _ntId = null;
+  function resetNt() {
+    document.getElementById('ntStep1').style.display = '';
+    document.getElementById('ntStep2').style.display = 'none';
+    document.getElementById('ntSubmit').style.display = '';
+    document.getElementById('ntCommentBtn').style.display = 'none';
+    document.getElementById('ntDoneBtn').style.display = 'none';
+    document.getElementById('ntError').style.display = 'none';
+    document.getElementById('ntDesc').value = '';
+    document.getElementById('ntDue').value = '';
+    document.getElementById('ntPriority').value = 'low';
+    document.getElementById('ntComment').value = '';
+    document.getElementById('ntCommentFeedback').style.display = 'none';
+    _ntId = null;
+  }
+  document.getElementById('newTaskModal').addEventListener('hidden.bs.modal', resetNt);
+  document.getElementById('ntSubmit').addEventListener('click', function() {
+    var desc = document.getElementById('ntDesc').value.trim();
+    var listId = document.getElementById('ntList').value;
+    var due = document.getElementById('ntDue').value;
+    var pri = document.getElementById('ntPriority').value;
+    var errEl = document.getElementById('ntError');
+    if (!desc) { errEl.textContent = 'Description is required.'; errEl.style.display = ''; return; }
+    if (!listId) { errEl.textContent = 'Please select a list.'; errEl.style.display = ''; return; }
+    errEl.style.display = 'none';
+    var btn = this; btn.disabled = true; btn.textContent = 'Saving\u2026';
+    var fd = new FormData();
+    fd.append('list_id', listId); fd.append('description', desc);
+    fd.append('due_date', due); fd.append('priority', pri);
+    fetch('/tasks/quick-add', {method:'POST', body:fd})
+      .then(function(r){ return r.json(); })
+      .then(function(data) {
+        btn.disabled = false; btn.textContent = 'Create';
+        if (data.ok) {
+          _ntId = data.task_id;
+          document.getElementById('ntStep1').style.display = 'none';
+          document.getElementById('ntStep2').style.display = '';
+          document.getElementById('ntSubmit').style.display = 'none';
+          document.getElementById('ntCommentBtn').style.display = '';
+          document.getElementById('ntDoneBtn').style.display = '';
+        } else {
+          errEl.textContent = data.error || 'Something went wrong.';
+          errEl.style.display = '';
+        }
+      })
+      .catch(function(){ btn.disabled = false; btn.textContent = 'Create'; });
+  });
+  document.getElementById('ntCommentBtn').addEventListener('click', function() {
+    var body = document.getElementById('ntComment').value.trim();
+    if (!body) return;
+    var btn = this; btn.disabled = true;
+    var fd = new FormData(); fd.append('body', body);
+    fetch('/tasks/' + _ntId + '/comment-json', {method:'POST', body:fd})
+      .then(function(r){ return r.json(); })
+      .then(function(data) {
+        btn.disabled = false;
+        if (data.ok) {
+          document.getElementById('ntComment').value = '';
+          var fb = document.getElementById('ntCommentFeedback');
+          fb.textContent = '\u2713 Comment added'; fb.style.display = '';
+          setTimeout(function(){ fb.style.display = 'none'; }, 2000);
+        }
+      })
+      .catch(function(){ btn.disabled = false; });
+  });
+  document.getElementById('ntDoneBtn').addEventListener('click', function() {
+    bootstrap.Modal.getInstance(document.getElementById('newTaskModal')).hide();
+    location.reload();
+  });
+})();
 </script>
 {% endblock %}

@@ -172,8 +172,10 @@ def browse_articles():
         ).all()
     }
 
-    # Only show articles this user added themselves
-    query = Article.query.filter(Article.added_by == current_user.id)
+    # Show seed articles + user's own
+    query = Article.query.filter(
+        db.or_(Article.added_by.is_(None), Article.added_by == current_user.id)
+    )
     if q:
         like = f"%{q}%"
         query = query.filter(
@@ -181,11 +183,24 @@ def browse_articles():
         )
     if cat:
         query = query.filter(Article.category == cat)
-    all_articles = query.order_by(Article.created_at.desc()).all()
+    all_articles = query.order_by(Article.category.asc(), Article.title.asc()).all()
+
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for a in all_articles:
+        if a.added_by == current_user.id:
+            grouped["My Articles"].append(a)
+        else:
+            grouped[a.category or "General"].append(a)
+    sorted_cats = sorted([k for k in grouped if k != "My Articles"])
+    if "My Articles" in grouped:
+        sorted_cats.append("My Articles")
+    grouped_articles = [(c, grouped[c]) for c in sorted_cats]
 
     return render_template(
         "articles_browse.html",
-        articles=all_articles,
+        grouped_articles=grouped_articles,
+        all_articles=all_articles,
         saved_ids=saved_ids,
         reacted_ids=reacted_ids,
         q=q,

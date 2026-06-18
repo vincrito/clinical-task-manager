@@ -18,6 +18,7 @@ def index():
     open_tasks = []
     list_panels = []
     list_colors = {}
+    list_names = {}
     comment_counts = {}
     comment_latest = {}
     _today_dt = datetime.now(EASTERN).date()
@@ -111,6 +112,7 @@ def index():
 
         # Build list_colors for task rows (int key → color string)
         list_colors = {l.id: l.color for l in lists}
+        list_names = {l.id: l.name for l in lists}
 
         lc_rows = (
             db.session.query(Task.list_id, Task.status, func.count(Task.id))
@@ -166,6 +168,7 @@ def index():
         open_tasks=open_tasks,
         list_panels=list_panels,
         list_colors=list_colors,
+        list_names=list_names,
         comment_counts=comment_counts,
         comment_latest=comment_latest,
         today=today,

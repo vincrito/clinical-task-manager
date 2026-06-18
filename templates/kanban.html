@@ -1,0 +1,256 @@
+{% extends "layout.html" %}
+{% block content %}
+<div style="max-width:1100px; margin:0 auto; padding:0 1rem 2rem;">
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <h2 class="mb-0" style="font-size:1.4em; font-weight:600; color:#2c3e50;">Kanban Board</h2>
+    <button class="btn btn-sm btn-outline-secondary" type="button"
+            data-bs-toggle="collapse" data-bs-target="#kanbanFilters">
+      &#9881; Filters
+    </button>
+  </div>
+
+  <!-- Filter panel -->
+  <div class="collapse mb-3" id="kanbanFilters">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body py-2 px-3">
+        <form method="get" action="{{ url_for('tasks.kanban') }}" class="d-flex flex-wrap gap-2 align-items-center">
+          <span class="small fw-semibold text-muted me-1">Lists:</span>
+          {% for lst in all_lists %}
+          <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input" type="checkbox" name="list_ids"
+                   value="{{ lst.id }}" id="kfl{{ lst.id }}"
+                   {{ 'checked' if lst.id in selected_ids }}>
+            <label class="form-check-label small" for="kfl{{ lst.id }}">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{{ lst.color }};margin-right:2px;"></span>
+              {{ lst.name }}
+            </label>
+          </div>
+          {% endfor %}
+          <button class="btn btn-sm btn-primary ms-2">Apply</button>
+          <a class="btn btn-sm btn-link text-muted" href="{{ url_for('tasks.kanban') }}">All lists</a>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Columns -->
+  <div class="row g-3">
+
+    <!-- Pending -->
+    <div class="col-12 col-md-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom py-2 px-3">
+          <span class="fw-semibold" style="font-size:.9em;">
+            &#9634; Pending
+            <span class="badge bg-secondary ms-1">{{ pending|length }}</span>
+          </span>
+        </div>
+        <div class="card-body p-2" style="max-height:70vh; overflow-y:auto;">
+          {% for t in pending %}
+          <div class="card border-0 bg-light mb-2" style="cursor:pointer;" onclick="openTaskDetail({{ t.id }})">
+            <div class="card-body py-2 px-3">
+              <div class="d-flex align-items-start gap-2">
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{{ list_colors.get(t.list_id,'#ccc') }};margin-top:4px;flex-shrink:0;"></span>
+                <div style="flex:1;min-width:0;">
+                  <div class="task-name" style="font-size:.9em;font-weight:500;">{{ t.description }}</div>
+                  <div class="d-flex gap-2 mt-1 flex-wrap" style="font-size:.75em;color:#aaa;">
+                    <span>{{ list_names.get(t.list_id,'') }}</span>
+                    {% if t.due_date %}<span>&#128197; {{ t.due_date | mdy }}</span>{% endif %}
+                    {% if t.priority == 'high' %}<span class="badge text-bg-danger">High</span>
+                    {% elif t.priority == 'low' %}<span class="badge text-bg-secondary">Low</span>
+                    {% else %}<span class="badge text-bg-warning">Med</span>{% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          {% else %}
+          <div class="text-center text-muted py-4" style="font-size:.85em;">No pending tasks</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- In Progress -->
+    <div class="col-12 col-md-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom py-2 px-3">
+          <span class="fw-semibold" style="font-size:.9em;">
+            &#128260; In Progress
+            <span class="badge bg-warning text-dark ms-1">{{ in_progress|length }}</span>
+          </span>
+        </div>
+        <div class="card-body p-2" style="max-height:70vh; overflow-y:auto;">
+          {% for t in in_progress %}
+          <div class="card border-0 bg-light mb-2" style="cursor:pointer;" onclick="openTaskDetail({{ t.id }})">
+            <div class="card-body py-2 px-3">
+              <div class="d-flex align-items-start gap-2">
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{{ list_colors.get(t.list_id,'#ccc') }};margin-top:4px;flex-shrink:0;"></span>
+                <div style="flex:1;min-width:0;">
+                  <div class="task-name" style="font-size:.9em;font-weight:500;">{{ t.description }}</div>
+                  <div class="d-flex gap-2 mt-1 flex-wrap" style="font-size:.75em;color:#aaa;">
+                    <span>{{ list_names.get(t.list_id,'') }}</span>
+                    {% if t.due_date %}<span>&#128197; {{ t.due_date | mdy }}</span>{% endif %}
+                    {% if t.priority == 'high' %}<span class="badge text-bg-danger">High</span>
+                    {% elif t.priority == 'low' %}<span class="badge text-bg-secondary">Low</span>
+                    {% else %}<span class="badge text-bg-warning">Med</span>{% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          {% else %}
+          <div class="text-center text-muted py-4" style="font-size:.85em;">No tasks in progress</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Task detail modal -->
+<div class="modal fade" id="taskDetailModal" tabindex="-1" aria-modal="true" role="dialog">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-1">
+        <h5 class="modal-title">Task Detail</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="detailError" class="alert alert-danger py-1 px-2 small mb-2" style="display:none;"></div>
+        <div class="row g-3 mb-3">
+          <div class="col-12">
+            <label class="form-label fw-semibold">Description</label>
+            <textarea id="detailDesc" class="form-control" rows="2" autocapitalize="sentences" autocorrect="on" spellcheck="true"></textarea>
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label">Due date</label>
+            <input id="detailDue" type="date" class="form-control">
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label">Priority</label>
+            <select id="detailPriority" class="form-select">
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label">Status</label>
+            <select id="detailStatus" class="form-select">
+              <option value="pending">Pending</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label">List</label>
+            <select id="detailList" class="form-select"></select>
+          </div>
+        </div>
+        <hr class="my-2">
+        <div class="fw-semibold mb-2" style="font-size:.9em;">Comments</div>
+        <ul id="detailComments" class="list-unstyled mb-3" style="max-height:180px;overflow-y:auto;font-size:.88em;"></ul>
+        <div class="d-flex gap-2">
+          <input id="detailCommentInput" class="form-control form-control-sm"
+                 placeholder="Add a comment…" autocapitalize="sentences" autocorrect="on" spellcheck="true">
+          <button id="detailCommentBtn" class="btn btn-sm btn-secondary">Add</button>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-1">
+        <button id="detailSaveBtn" class="btn btn-primary btn-sm">Save</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+var currentDetailTaskId=null;
+function openTaskDetail(tid){
+  currentDetailTaskId=tid;
+  document.getElementById('detailError').style.display='none';
+  document.getElementById('detailCommentInput').value='';
+  fetch('/tasks/'+tid+'/json')
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(!data.ok)return;
+      var t=data.task;
+      document.getElementById('detailDesc').value=t.description;
+      document.getElementById('detailDue').value=t.due_date||'';
+      document.getElementById('detailPriority').value=t.priority;
+      document.getElementById('detailStatus').value=t.status;
+      var sel=document.getElementById('detailList');
+      sel.innerHTML='';
+      data.lists.forEach(function(l){
+        var opt=document.createElement('option');
+        opt.value=l.id; opt.textContent=l.name;
+        if(l.id==t.list_id)opt.selected=true;
+        sel.appendChild(opt);
+      });
+      var ul=document.getElementById('detailComments');
+      ul.innerHTML='';
+      if(!data.comments.length){
+        ul.innerHTML='<li class="text-muted">No comments yet.</li>';
+      }else{
+        data.comments.forEach(function(c){
+          var li=document.createElement('li');
+          li.className='mb-1 pb-1 border-bottom';
+          li.innerHTML=escHtml(c.body)+' <small class="text-muted">'+escHtml(c.created_at)+'</small>';
+          ul.appendChild(li);
+        });
+        ul.scrollTop=ul.scrollHeight;
+      }
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('taskDetailModal')).show();
+    });
+}
+document.getElementById('detailSaveBtn').addEventListener('click',function(){
+  var tid=currentDetailTaskId;
+  var btn=this; btn.disabled=true;
+  var fd=new FormData();
+  fd.append('description',document.getElementById('detailDesc').value.trim());
+  fd.append('due_date',document.getElementById('detailDue').value);
+  fd.append('priority',document.getElementById('detailPriority').value);
+  fd.append('status',document.getElementById('detailStatus').value);
+  fd.append('list_id',document.getElementById('detailList').value);
+  fetch('/tasks/'+tid+'/update-json',{method:'POST',body:fd})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      btn.disabled=false;
+      if(data.ok){
+        bootstrap.Modal.getInstance(document.getElementById('taskDetailModal')).hide();
+        location.reload();
+      }else{
+        document.getElementById('detailError').textContent=data.error||'Save failed.';
+        document.getElementById('detailError').style.display='';
+      }
+    })
+    .catch(function(){btn.disabled=false;});
+});
+document.getElementById('detailCommentBtn').addEventListener('click',function(){
+  var body=document.getElementById('detailCommentInput').value.trim();
+  if(!body)return;
+  var btn=this; btn.disabled=true;
+  var fd=new FormData(); fd.append('body',body);
+  fetch('/tasks/'+currentDetailTaskId+'/comment-json',{method:'POST',body:fd})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      btn.disabled=false;
+      if(data.ok){
+        document.getElementById('detailCommentInput').value='';
+        var ul=document.getElementById('detailComments');
+        var ph=ul.querySelector('li.text-muted'); if(ph)ph.remove();
+        var li=document.createElement('li'); li.className='mb-1 pb-1 border-bottom';
+        li.innerHTML=escHtml(data.comment.body)+' <small class="text-muted">'+escHtml(data.comment.created_at)+'</small>';
+        ul.appendChild(li); ul.scrollTop=ul.scrollHeight;
+      }
+    })
+    .catch(function(){btn.disabled=false;});
+});
+document.getElementById('detailCommentInput').addEventListener('keydown',function(e){
+  if(e.key==='Enter'){e.preventDefault();document.getElementById('detailCommentBtn').click();}
+});
+</script>
+{% endblock %}

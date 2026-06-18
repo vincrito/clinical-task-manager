@@ -177,6 +177,67 @@ def suggestions_json():
             break
     return jsonify(ok=True, suggestions=suggestions)
 
+
+@bp.get("/tasks/export.csv")
+@login_required
+def export_csv():
+    import csv, io
+    from flask import Response
+    all_lists = {l.id: l.name for l in TaskList.query.filter_by(user_id=current_user.id).all()}
+    tasks_all = Task.query.filter_by(user_id=current_user.id).order_by(Task.created_at.desc()).all()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "Description", "List", "Priority", "Status", "Due Date", "Created", "Updated"])
+    for t in tasks_all:
+        writer.writerow([
+            t.id, t.description,
+            all_lists.get(t.list_id, ""),
+            t.priority, t.status,
+            t.due_date or "",
+            t.created_at.strftime("%m/%d/%y") if t.created_at else "",
+            t.updated_at.strftime("%m/%d/%y") if t.updated_at else "",
+        ])
+    return Response(
+        output.getvalue(), mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=tasks.csv"})
+
+
+@bp.get("/kanban")
+@login_required
+def kanban():
+    from sqlalchemy import case as _sa_case
+    all_lists = TaskList.query.filter_by(user_id=current_user.id).order_by(TaskList.name.asc()).all()
+    selected_ids = request.args.getlist("list_ids", type=int) or [l.id for l in all_lists]
+    _pri = _sa_case(
+        (Task.priority == "high", 1),
+        (Task.priority == "medium", 2),
+        else_=3
+    )
+    active = (
+        Task.query
+        .filter(
+            Task.user_id == current_user.id,
+            Task.list_id.in_(selected_ids),
+            Task.status != "completed",
+        )
+        .order_by(_pri, Task.due_date.asc().nulls_last())
+        .all()
+    )
+    list_colors = {l.id: l.color for l in all_lists}
+    list_names = {l.id: l.name for l in all_lists}
+    pending = [t for t in active if t.status == "pending"]
+    in_progress = [t for t in active if t.status == "in_progress"]
+    return render_template(
+        "kanban.html",
+        all_lists=all_lists,
+        selected_ids=selected_ids,
+        pending=pending,
+        in_progress=in_progress,
+        list_colors=list_colors,
+        list_names=list_names,
+    )
+
+
 @bp.get("/tasks")
 @login_required
 def list_tasks():
