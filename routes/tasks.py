@@ -206,14 +206,22 @@ def list_tasks():
         (Task.priority == "medium", 2),
         else_=3
     )
-    rows = (query.order_by(
+    all_rows = (query.order_by(
                 Task.due_date.asc().nulls_last(),
                 _pri,
                 Task.list_id)
             .all())
 
+    active_tasks = [t for t in all_rows if t.status != "completed"]
+    completed_tasks = sorted(
+        [t for t in all_rows if t.status == "completed"],
+        key=lambda t: t.updated_at or t.created_at,
+        reverse=True,
+    )
+
     # map list_id -> label for display
-    list_ids = {t.list_id for t in rows}
+    all_rows = active_tasks + completed_tasks
+    list_ids = {t.list_id for t in all_rows}
     lists = {}
     if list_ids:
         llist = (TaskList.query
@@ -224,7 +232,7 @@ def list_tasks():
             lists[l.id] = l.display_label()
 
     # load comments for all listed tasks in one query and group them
-    task_ids = [t.id for t in rows]                                          # collect task ids                                  # list
+    task_ids = [t.id for t in all_rows]                                          # collect task ids                                  # list
     comments_by_task = {tid: [] for tid in task_ids}                         # init map id -> list                               # dict
     if task_ids:                                                             # only query if we have tasks                       # guard
         all_comments = (Comment.query
@@ -244,7 +252,8 @@ def list_tasks():
     comment_latest = {tid: cs[0].body if cs else "" for tid, cs in comments_by_task.items()}
 
     return render_template("tasks_list.html",
-                           tasks=rows,
+                           active_tasks=active_tasks,
+                           completed_tasks=completed_tasks,
                            lists=lists,
                            all_user_lists=all_user_lists,
                            list_colors=list_colors,

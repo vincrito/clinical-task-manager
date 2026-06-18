@@ -33,7 +33,7 @@
     {% endif %}
   </form>
 
-  {% if tasks %}
+  {% if active_tasks %}
   <table class="table table-sm align-middle" style="font-size:.9em;">
     <thead class="text-muted" style="font-size:.78em; text-transform:uppercase; letter-spacing:.04em;">
       <tr>
@@ -46,7 +46,7 @@
       </tr>
     </thead>
     <tbody>
-      {% for t in tasks %}
+      {% for t in active_tasks %}
       <tr class="task-row" data-task-id="{{ t.id }}" data-list-id="{{ t.list_id }}">
         <td style="padding-right:2px;">
           <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:{{ list_colors.get(t.list_id,'#ccc') }};vertical-align:middle;"></span>
@@ -64,9 +64,7 @@
         <td class="text-nowrap text-muted">{{ (t.due_date | mdy) if t.due_date else '—' }}</td>
         <td class="text-nowrap text-muted">{{ t.status | statuslabel }}</td>
         <td class="text-end text-nowrap" style="width:80px;">
-          {% if t.status != 'completed' %}
           <button class="btn btn-sm btn-link text-success complete-btn p-0 px-1" title="Mark done">&#10003;</button>
-          {% endif %}
           <form method="post" action="{{ url_for('tasks.delete_task', tid=t.id) }}" style="display:inline"
                 onsubmit="return confirm('Delete this task?');">
             <button class="btn btn-sm btn-link text-danger p-0 px-1" title="Delete">&#128465;</button>
@@ -84,6 +82,54 @@
     {% else %}
       <a href="{{ url_for('tasks.new_task') }}" class="small">Create your first task</a>
     {% endif %}
+  </div>
+  {% endif %}
+
+  {% if completed_tasks %}
+  <div class="mt-4">
+    <button class="btn btn-link p-0 text-muted text-decoration-none d-flex align-items-center gap-1"
+            style="font-size:.82em;"
+            data-bs-toggle="collapse" data-bs-target="#completedSection" aria-expanded="false">
+      &#10003; Completed ({{ completed_tasks|length }}) <span style="font-size:.8em;">&#9660;</span>
+    </button>
+    <div class="collapse" id="completedSection">
+      <table class="table table-sm align-middle mt-2" style="font-size:.85em; color:#888;">
+        <thead style="font-size:.75em; text-transform:uppercase; letter-spacing:.04em;">
+          <tr>
+            <th style="width:14px;"></th>
+            <th>Description</th>
+            <th>Priority</th>
+            <th>Due</th>
+            <th>Completed</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in completed_tasks %}
+          <tr class="task-row" data-task-id="{{ t.id }}" data-list-id="{{ t.list_id }}">
+            <td style="padding-right:2px;">
+              <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:{{ list_colors.get(t.list_id,'#ccc') }};vertical-align:middle;opacity:.5;"></span>
+            </td>
+            <td><span class="task-name" style="cursor:pointer; text-decoration:line-through; color:#aaa;"
+                  onclick="openTaskDetail({{ t.id }})">{{ t.description }}</span></td>
+            <td>
+              {% if t.priority == 'high' %}<span class="badge text-bg-danger" style="opacity:.6;">High</span>
+              {% elif t.priority == 'low' %}<span class="badge text-bg-secondary" style="opacity:.6;">Low</span>
+              {% else %}<span class="badge text-bg-warning" style="opacity:.6;">Med</span>{% endif %}
+            </td>
+            <td class="text-nowrap">{{ (t.due_date | mdy) if t.due_date else '—' }}</td>
+            <td class="text-nowrap">{{ t.updated_at.strftime('%m/%d/%y') if t.updated_at else '—' }}</td>
+            <td class="text-end text-nowrap" style="width:60px;">
+              <form method="post" action="{{ url_for('tasks.delete_task', tid=t.id) }}" style="display:inline"
+                    onsubmit="return confirm('Delete this task?');">
+                <button class="btn btn-sm btn-link text-danger p-0 px-1" title="Delete">&#128465;</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
   {% endif %}
 

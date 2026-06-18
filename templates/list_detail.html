@@ -71,6 +71,51 @@
   </div>
   {% endif %}
 
+  {% if completed_tasks %}
+  <div class="mt-4">
+    <button class="btn btn-link p-0 text-muted text-decoration-none d-flex align-items-center gap-1"
+            style="font-size:.82em;"
+            data-bs-toggle="collapse" data-bs-target="#completedSection" aria-expanded="false">
+      &#10003; Completed ({{ completed_tasks|length }}) <span style="font-size:.8em;">&#9660;</span>
+    </button>
+    <div class="collapse" id="completedSection">
+      <table class="table table-sm align-middle mt-2" style="font-size:.85em; color:#888;">
+        <thead style="font-size:.75em; text-transform:uppercase; letter-spacing:.04em;">
+          <tr>
+            <th>Description</th>
+            <th>Priority</th>
+            <th>Due</th>
+            <th>Completed</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in completed_tasks %}
+          <tr class="task-row" data-task-id="{{ t.id }}" data-list-id="{{ lst.id }}">
+            <td><span class="task-name" style="cursor:pointer; text-decoration:line-through; color:#aaa;"
+                  onclick="openTaskDetail({{ t.id }})">{{ t.description }}</span></td>
+            <td>
+              {% if t.priority == 'high' %}<span class="badge text-bg-danger" style="opacity:.6;">High</span>
+              {% elif t.priority == 'low' %}<span class="badge text-bg-secondary" style="opacity:.6;">Low</span>
+              {% else %}<span class="badge text-bg-warning" style="opacity:.6;">Med</span>{% endif %}
+            </td>
+            <td class="text-nowrap">{{ (t.due_date | mdy) if t.due_date else '—' }}</td>
+            <td class="text-nowrap">{{ t.updated_at.strftime('%m/%d/%y') if t.updated_at else '—' }}</td>
+            <td class="text-end text-nowrap" style="width:60px;">
+              <form method="post" action="{{ url_for('tasks.delete_task', tid=t.id) }}" style="display:inline"
+                    onsubmit="return confirm('Delete this task?');">
+                <input type="hidden" name="redirect_to" value="{{ url_for('lists.list_detail', lid=lst.id) }}">
+                <button class="btn btn-sm btn-link text-danger p-0 px-1" title="Delete">&#128465;</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
   <a class="btn btn-outline-secondary btn-sm mt-2" href="{{ url_for('lists.list_lists') }}">← All Lists</a>
 
 </div>

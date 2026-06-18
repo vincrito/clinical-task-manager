@@ -81,13 +81,19 @@ def list_detail(lid: int):
         (Task.priority == "medium", 2),
         else_=3
     )
-    tasks = (Task.query
+    all_tasks = (Task.query
              .filter_by(user_id=current_user.id, list_id=lid)
              .order_by(Task.due_date.asc().nulls_last(), _pri)
              .all())
+    tasks = [t for t in all_tasks if t.status != "completed"]
+    completed_tasks = sorted(
+        [t for t in all_tasks if t.status == "completed"],
+        key=lambda t: t.updated_at or t.created_at,
+        reverse=True,
+    )
     all_lists = TaskList.query.filter_by(user_id=current_user.id).order_by(TaskList.name).all()
     list_colors = {l.id: l.color for l in all_lists}
-    task_ids = [t.id for t in tasks]
+    task_ids = [t.id for t in all_tasks]
     cmap = {}
     if task_ids:
         for c in Comment.query.filter(Comment.task_id.in_(task_ids)).order_by(Comment.created_at.desc()).all():
@@ -95,6 +101,7 @@ def list_detail(lid: int):
     comment_counts = {tid: len(cs) for tid, cs in cmap.items()}
     comment_latest = {tid: cs[0].body for tid, cs in cmap.items()}
     return render_template("list_detail.html", lst=lst, tasks=tasks,
+                           completed_tasks=completed_tasks,
                            list_colors=list_colors,
                            comment_counts=comment_counts,
                            comment_latest=comment_latest)
