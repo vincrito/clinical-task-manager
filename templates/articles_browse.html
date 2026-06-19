@@ -84,8 +84,6 @@
                 <span class="text-muted" style="font-size:.78em;">{{ article.author }}</span>
               {% endif %}
               <div class="fw-semibold" style="font-size:.92em;">
-                <span class="read-check text-success me-1" data-aid="{{ article.id }}"
-                      style="{{ '' if is_saved else 'display:none;' }}">&#10003;</span>
                 {% if article.pdf_path %}
                   <a href="{{ url_for('static', filename=article.pdf_path) }}" target="_blank"
                      class="text-decoration-none text-dark">{{ article.title }} <span class="text-muted" style="font-size:.75em;">PDF &#8599;</span></a>
@@ -128,10 +126,9 @@
               </div>
             </div>
             <div class="d-flex align-items-center gap-2 flex-shrink-0 ms-2">
-              <button class="btn btn-link p-0 toggle-read-btn"
+              <button class="btn btn-link p-0 toggle-read-btn d-flex align-items-center gap-1"
                       data-aid="{{ article.id }}"
-                      title="{{ 'Mark as unread' if is_saved else 'Mark as read' }}"
-                      style="font-size:1.1em; line-height:1; color:{{ '#27ae60' if is_saved else '#aaa' }};">&#9673;</button>
+                      style="color:{{ '#27ae60' if is_saved else '#bbb' }}; text-decoration:none; font-size:.82em;">&#9673; <span>read</span></button>
               <form method="post" action="{{ url_for('articles.delete_article', aid=article.id) }}"
                     onsubmit="return confirm('Delete this article?');" class="mb-0">
                 <button class="btn btn-link p-0 text-danger"
@@ -156,24 +153,20 @@
 </div>
 
 <script>
-// Toggle read
+// Toggle read — reload so article moves to correct section
 document.addEventListener('click', function(e) {
   var btn = e.target.closest('.toggle-read-btn');
   if (!btn) return;
   var aid = btn.dataset.aid;
   btn.disabled = true;
+  btn.style.opacity = '0.5';
   fetch('/articles/'+aid+'/toggle-read-json', {method:'POST'})
     .then(function(r){ return r.json(); })
     .then(function(data) {
-      btn.disabled = false;
-      if (!data.ok) return;
-      var isRead = data.read;
-      btn.style.color = isRead ? '#27ae60' : '#aaa';
-      btn.title = isRead ? 'Mark as unread' : 'Mark as read';
-      var check = document.querySelector('.read-check[data-aid="'+aid+'"]');
-      if (check) check.style.display = isRead ? '' : 'none';
+      if (!data.ok) { btn.disabled = false; btn.style.opacity = ''; return; }
+      location.reload();
     })
-    .catch(function(){ btn.disabled = false; });
+    .catch(function(){ btn.disabled = false; btn.style.opacity = ''; });
 });
 
 // Per-article inline notes save
