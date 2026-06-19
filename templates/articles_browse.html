@@ -98,13 +98,19 @@
                         type="button" data-bs-toggle="collapse"
                         data-bs-target="#notes{{ article.id }}">&#128221; Notes</button>
                 <div class="collapse{% if article.notes %} show{% endif %}" id="notes{{ article.id }}">
-                  <textarea class="form-control form-control-sm mt-1 article-notes"
+                  {% if article.notes %}
+                  <div class="notes-preview mt-1" data-aid="{{ article.id }}"
+                       style="font-size:.82em; color:#555; white-space:pre-wrap; line-height:1.5; padding:.35rem .5rem; background:#f8f9fa; border-radius:4px;">{{ article.notes }}</div>
+                  {% endif %}
+                  <textarea class="form-control form-control-sm mt-1 article-notes{% if article.notes %} d-none{% endif %}"
                             data-aid="{{ article.id }}"
                             rows="3" placeholder="Your thoughts, highlights, key takeaways…"
                             style="font-size:.82em; resize:vertical;">{{ article.notes or '' }}</textarea>
                   <div class="d-flex align-items-center gap-2 mt-1">
-                    <button class="btn btn-sm btn-outline-secondary save-notes-btn" data-aid="{{ article.id }}"
+                    <button class="btn btn-sm btn-outline-secondary save-notes-btn{% if article.notes %} d-none{% endif %}" data-aid="{{ article.id }}"
                             style="font-size:.75em; padding:.2rem .55rem;">Save</button>
+                    <button class="btn btn-sm btn-link p-0 text-muted edit-notes-btn{% if not article.notes %} d-none{% endif %}" data-aid="{{ article.id }}"
+                            style="font-size:.75em;">Edit</button>
                     <span class="notes-saved-msg text-success" data-aid="{{ article.id }}"
                           style="font-size:.75em; display:none;">&#10003; Saved</span>
                   </div>
@@ -153,23 +159,56 @@
 <script>
 // Per-article inline notes save
 document.addEventListener('click', function(e) {
+  // Save button
   var btn = e.target.closest('.save-notes-btn');
-  if (!btn) return;
-  var aid = btn.dataset.aid;
-  var ta = document.querySelector('.article-notes[data-aid="'+aid+'"]');
-  if (!ta) return;
-  btn.disabled = true;
-  var fd = new FormData(); fd.append('notes', ta.value);
-  fetch('/articles/'+aid+'/notes-json', {method:'POST', body:fd})
-    .then(function(r){ return r.json(); })
-    .then(function(data) {
-      btn.disabled = false;
-      if (data.ok) {
-        var msg = document.querySelector('.notes-saved-msg[data-aid="'+aid+'"]');
-        if (msg) { msg.style.display=''; setTimeout(function(){ msg.style.display='none'; }, 2000); }
-      }
-    })
-    .catch(function(){ btn.disabled = false; });
+  if (btn) {
+    var aid = btn.dataset.aid;
+    var ta = document.querySelector('.article-notes[data-aid="'+aid+'"]');
+    if (!ta) return;
+    btn.disabled = true;
+    var fd = new FormData(); fd.append('notes', ta.value);
+    fetch('/articles/'+aid+'/notes-json', {method:'POST', body:fd})
+      .then(function(r){ return r.json(); })
+      .then(function(data) {
+        btn.disabled = false;
+        if (data.ok) {
+          var text = ta.value.trim();
+          // Show preview, hide textarea and save btn, show edit btn
+          var preview = document.querySelector('.notes-preview[data-aid="'+aid+'"]');
+          if (!preview) {
+            preview = document.createElement('div');
+            preview.className = 'notes-preview mt-1';
+            preview.dataset.aid = aid;
+            preview.style.cssText = 'font-size:.82em;color:#555;white-space:pre-wrap;line-height:1.5;padding:.35rem .5rem;background:#f8f9fa;border-radius:4px;';
+            ta.parentNode.insertBefore(preview, ta);
+          }
+          preview.textContent = text;
+          preview.style.display = text ? '' : 'none';
+          ta.classList.add('d-none');
+          btn.classList.add('d-none');
+          var editBtn = document.querySelector('.edit-notes-btn[data-aid="'+aid+'"]');
+          if (editBtn) editBtn.classList.remove('d-none');
+          var msg = document.querySelector('.notes-saved-msg[data-aid="'+aid+'"]');
+          if (msg) { msg.style.display=''; setTimeout(function(){ msg.style.display='none'; }, 2000); }
+        }
+      })
+      .catch(function(){ btn.disabled = false; });
+    return;
+  }
+  // Edit button
+  var editBtn = e.target.closest('.edit-notes-btn');
+  if (editBtn) {
+    var aid = editBtn.dataset.aid;
+    var ta = document.querySelector('.article-notes[data-aid="'+aid+'"]');
+    var preview = document.querySelector('.notes-preview[data-aid="'+aid+'"]');
+    var saveBtn = document.querySelector('.save-notes-btn[data-aid="'+aid+'"]');
+    if (ta) ta.classList.remove('d-none');
+    if (preview) preview.style.display = 'none';
+    if (saveBtn) saveBtn.classList.remove('d-none');
+    editBtn.classList.add('d-none');
+    if (ta) ta.focus();
+    return;
+  }
 });
 
 // New Note modal — wrapped in DOMContentLoaded so modal HTML is in DOM
