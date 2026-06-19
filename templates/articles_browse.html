@@ -127,7 +127,10 @@
             <div class="d-flex align-items-center gap-2 flex-shrink-0 ms-2">
               <button class="btn btn-link p-0 toggle-read-btn d-flex align-items-center gap-1"
                       data-aid="{{ article.id }}"
-                      style="color:{{ '#27ae60' if is_saved else '#bbb' }}; text-decoration:none; font-size:.82em;">&#9673; <span>read</span></button>
+                      style="color:{{ '#27ae60' if is_saved else '#bbb' }}; text-decoration:none; font-size:.82em; line-height:1;">
+                <span style="font-size:1em; line-height:1;">{{ '&#9679;' if is_saved else '&#9675;' }}</span>
+                <span>read</span>
+              </button>
               <form method="post" action="{{ url_for('articles.delete_article', aid=article.id) }}"
                     onsubmit="return confirm('Delete this article?');" class="mb-0">
                 <button class="btn btn-link p-0 text-danger"
@@ -163,7 +166,11 @@ document.addEventListener('click', function(e) {
     .then(function(r){ return r.json(); })
     .then(function(data) {
       if (!data.ok) { btn.disabled = false; btn.style.opacity = ''; return; }
-      location.reload();
+      // swap icon before reload for instant feedback
+      var iconEl = btn.querySelector('span:first-child');
+      if (iconEl) iconEl.textContent = data.read ? '\u25cf' : '\u25cb';
+      btn.style.color = data.read ? '#27ae60' : '#bbb';
+      setTimeout(function(){ location.reload(); }, 150);
     })
     .catch(function(){ btn.disabled = false; btn.style.opacity = ''; });
 });
