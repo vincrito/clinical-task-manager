@@ -61,10 +61,18 @@
                 <span class="note-expand-lbl">&#9656; expand</span>
               </button>
             </div>
-            <div class="d-flex flex-column align-items-end gap-1 flex-shrink-0">
+            <div class="d-flex align-items-center gap-2 flex-shrink-0 ms-2">
+              <button class="btn btn-link p-0 text-secondary edit-note-trigger"
+                      style="font-size:1em; line-height:1;"
+                      data-aid="{{ article.id }}"
+                      data-title="{{ article.title | e }}"
+                      data-body="{{ article.summary | e }}"
+                      data-tags="{{ article.tags | e }}"
+                      title="Edit note">&#9998;</button>
               <form method="post" action="{{ url_for('articles.delete_article', aid=article.id) }}"
-                    onsubmit="return confirm('Delete this note?');">
-                <button class="btn btn-link btn-sm text-danger p-0" style="font-size:.72em;">Delete</button>
+                    onsubmit="return confirm('Delete this note?');" class="mb-0">
+                <button class="btn btn-link p-0 text-danger"
+                        style="font-size:1em; line-height:1;" title="Delete note">&#128465;</button>
               </form>
             </div>
           </div>
@@ -118,6 +126,11 @@
               </div>
             </div>
             <div class="d-flex flex-column align-items-end gap-1 flex-shrink-0">
+              <form method="post" action="{{ url_for('articles.delete_article', aid=article.id) }}"
+                    onsubmit="return confirm('Delete this article?');" class="mb-0">
+                <button class="btn btn-link p-0 text-danger"
+                        style="font-size:1em; line-height:1;" title="Delete article">&#128465;</button>
+              </form>
               {% if is_saved %}
                 <span class="badge bg-success" style="font-size:.72em;">&#10003; Read</span>
                 <form method="post" action="{{ url_for('articles.react', aid=article.id) }}">
@@ -211,6 +224,49 @@ document.addEventListener('click', function(e) {
   }
 });
 
+// Edit note trigger
+document.addEventListener('click', function(e) {
+  var trigger = e.target.closest('.edit-note-trigger');
+  if (!trigger) return;
+  var modal = document.getElementById('editNoteModal');
+  if (!modal) return;
+  document.getElementById('enAid').value   = trigger.dataset.aid;
+  document.getElementById('enTitle').value = trigger.dataset.title;
+  document.getElementById('enBody').value  = trigger.dataset.body;
+  document.getElementById('enError').style.display = 'none';
+  var savedTags = trigger.dataset.tags.split(',').map(function(t){ return t.trim().toLowerCase(); });
+  modal.querySelectorAll('input[name="en_tags"]').forEach(function(cb){
+    cb.checked = savedTags.indexOf(cb.value) !== -1;
+  });
+  bootstrap.Modal.getOrCreateInstance(modal).show();
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+  var enModal = document.getElementById('editNoteModal');
+  if (!enModal) return;
+  enModal.addEventListener('shown.bs.modal', function(){ document.getElementById('enTitle').focus(); });
+  document.getElementById('enSubmit').addEventListener('click', function() {
+    var aid   = document.getElementById('enAid').value;
+    var title = document.getElementById('enTitle').value.trim();
+    var body  = document.getElementById('enBody').value.trim();
+    var errEl = document.getElementById('enError');
+    if (!title) { errEl.textContent='Title is required.'; errEl.style.display=''; return; }
+    if (!body)  { errEl.textContent='Note body is required.'; errEl.style.display=''; return; }
+    var btn = this; btn.disabled = true; btn.textContent = 'Saving…';
+    var fd = new FormData();
+    fd.append('title', title); fd.append('body', body);
+    enModal.querySelectorAll('input[name="en_tags"]:checked').forEach(function(cb){ fd.append('tags', cb.value); });
+    fetch('/articles/'+aid+'/update-note-json', {method:'POST', body:fd})
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        btn.disabled = false; btn.textContent = 'Save';
+        if (data.ok) { bootstrap.Modal.getInstance(enModal).hide(); location.reload(); }
+        else { errEl.textContent = data.error||'Something went wrong.'; errEl.style.display=''; }
+      })
+      .catch(function(){ btn.disabled=false; btn.textContent='Save'; });
+  });
+});
+
 // New Note modal — wrapped in DOMContentLoaded so modal HTML is in DOM
 document.addEventListener('DOMContentLoaded', function() {
   var modal = document.getElementById('newNoteModal');
@@ -251,6 +307,52 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 </script>
+
+<!-- Edit Note Modal -->
+<div class="modal fade" id="editNoteModal" tabindex="-1" aria-modal="true" role="dialog">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-1">
+        <h5 class="modal-title">&#9998; Edit Note</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="enAid">
+        <div id="enError" class="alert alert-danger py-1 px-2 small mb-2" style="display:none;"></div>
+        <div class="mb-3">
+          <label class="form-label">Title <span class="text-danger">*</span></label>
+          <input id="enTitle" class="form-control" maxlength="200" autocapitalize="sentences" autocorrect="on">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Note <span class="text-danger">*</span></label>
+          <textarea id="enBody" class="form-control" rows="5"
+                    autocapitalize="sentences" autocorrect="on" spellcheck="true"
+                    style="resize:vertical;"></textarea>
+        </div>
+        <div>
+          <label class="form-label small text-muted">Tags <span class="fw-normal">(optional)</span></label>
+          <div class="row g-1" style="font-size:.82em;">
+            {% set tag_options = ['habits','psychology','medicine','leadership','management',
+               'productivity','strategy','decision-making','wellbeing','learning',
+               'communication','creativity','technology','finance','systems','research'] %}
+            {% for tag in tag_options %}
+            <div class="col-6 col-md-4">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="en_tags" value="{{ tag }}" id="entag_{{ tag }}">
+                <label class="form-check-label" for="entag_{{ tag }}">{{ tag }}</label>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-1">
+        <button id="enSubmit" class="btn btn-primary btn-sm">Save</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- New Note Modal -->
 <div class="modal fade" id="newNoteModal" tabindex="-1" aria-modal="true" role="dialog">

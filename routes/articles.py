@@ -315,6 +315,26 @@ def mark_read(aid: int):
     return redirect(url_for("articles.reading_log"))
 
 
+@bp.post("/articles/<int:aid>/update-note-json")
+@login_required
+def update_note(aid: int):
+    a = Article.query.filter_by(id=aid, added_by=current_user.id, content_type="Note").first()
+    if not a:
+        return jsonify(ok=False, error="Not found.")
+    title = request.form.get("title", "").strip()
+    body  = request.form.get("body", "").strip()
+    if not title:
+        return jsonify(ok=False, error="Title is required.")
+    if not body:
+        return jsonify(ok=False, error="Note body is required.")
+    tags_list = request.form.getlist("tags")
+    a.title   = title
+    a.summary = body
+    a.tags    = ", ".join(t.strip() for t in tags_list if t.strip())
+    db.session.commit()
+    return jsonify(ok=True)
+
+
 @bp.post("/articles/<int:aid>/delete")
 @login_required
 def delete_article(aid: int):
