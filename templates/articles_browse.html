@@ -84,6 +84,8 @@
                 <span class="text-muted" style="font-size:.78em;">{{ article.author }}</span>
               {% endif %}
               <div class="fw-semibold" style="font-size:.92em;">
+                <span class="read-check text-success me-1" data-aid="{{ article.id }}"
+                      style="{{ '' if is_saved else 'display:none;' }}">&#10003;</span>
                 {% if article.pdf_path %}
                   <a href="{{ url_for('static', filename=article.pdf_path) }}" target="_blank"
                      class="text-decoration-none text-dark">{{ article.title }} <span class="text-muted" style="font-size:.75em;">PDF &#8599;</span></a>
@@ -125,32 +127,16 @@
                 </div>
               </div>
             </div>
-            <div class="d-flex flex-column align-items-end gap-1 flex-shrink-0">
+            <div class="d-flex align-items-center gap-2 flex-shrink-0 ms-2">
+              <button class="btn btn-link p-0 toggle-read-btn"
+                      data-aid="{{ article.id }}"
+                      title="{{ 'Mark as unread' if is_saved else 'Mark as read' }}"
+                      style="font-size:1.1em; line-height:1; color:{{ '#27ae60' if is_saved else '#aaa' }};">&#9673;</button>
               <form method="post" action="{{ url_for('articles.delete_article', aid=article.id) }}"
                     onsubmit="return confirm('Delete this article?');" class="mb-0">
                 <button class="btn btn-link p-0 text-danger"
                         style="font-size:1em; line-height:1;" title="Delete article">&#128465;</button>
               </form>
-              {% if is_saved %}
-                <span class="badge bg-success" style="font-size:.72em;">&#10003; Read</span>
-                <form method="post" action="{{ url_for('articles.react', aid=article.id) }}">
-                  <input type="hidden" name="reaction" value="disliked">
-                  <button class="btn btn-link btn-sm text-danger p-0" style="font-size:.72em;"
-                          onclick="return confirm('Mark as unread?');">Unmark</button>
-                </form>
-              {% elif is_dismissed %}
-                <span class="text-muted" style="font-size:.72em;">Dismissed</span>
-                <form method="post" action="{{ url_for('articles.react', aid=article.id) }}">
-                  <input type="hidden" name="reaction" value="liked">
-                  <button class="btn btn-link btn-sm p-0" style="font-size:.72em;">Mark as Read</button>
-                </form>
-              {% else %}
-                <form method="post" action="{{ url_for('articles.react', aid=article.id) }}">
-                  <input type="hidden" name="reaction" value="liked">
-                  <input type="hidden" name="redirect_to" value="{{ url_for('articles.browse_articles', q=q, category=cat) }}">
-                  <button class="btn btn-sm btn-outline-secondary" style="font-size:.78em; padding:.2rem .55rem;">Mark as Read</button>
-                </form>
-              {% endif %}
             </div>
           </div>
           {% endif %}
@@ -170,6 +156,26 @@
 </div>
 
 <script>
+// Toggle read
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('.toggle-read-btn');
+  if (!btn) return;
+  var aid = btn.dataset.aid;
+  btn.disabled = true;
+  fetch('/articles/'+aid+'/toggle-read-json', {method:'POST'})
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      btn.disabled = false;
+      if (!data.ok) return;
+      var isRead = data.read;
+      btn.style.color = isRead ? '#27ae60' : '#aaa';
+      btn.title = isRead ? 'Mark as unread' : 'Mark as read';
+      var check = document.querySelector('.read-check[data-aid="'+aid+'"]');
+      if (check) check.style.display = isRead ? '' : 'none';
+    })
+    .catch(function(){ btn.disabled = false; });
+});
+
 // Per-article inline notes save
 document.addEventListener('click', function(e) {
   // Save button

@@ -93,6 +93,30 @@ def _check_nudge():
         session.modified = True
 
 
+@bp.post("/articles/<int:aid>/toggle-read-json")
+@login_required
+def toggle_read(aid: int):
+    article = Article.query.filter_by(id=aid, added_by=current_user.id).first()
+    if not article:
+        return jsonify(ok=False, error="Not found.")
+    existing = ArticleReaction.query.filter_by(
+        user_id=current_user.id, article_id=aid
+    ).first()
+    if existing and existing.reaction == "liked":
+        existing.reaction = "disliked"
+        now_read = False
+    else:
+        if existing:
+            existing.reaction = "liked"
+        else:
+            db.session.add(ArticleReaction(
+                user_id=current_user.id, article_id=aid, reaction="liked"
+            ))
+        now_read = True
+    db.session.commit()
+    return jsonify(ok=True, read=now_read)
+
+
 @bp.post("/articles/<int:aid>/react")
 @login_required
 def react(aid: int):
