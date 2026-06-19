@@ -39,7 +39,7 @@
       <span class="text-muted ms-auto" style="font-size:.7em;">&#9660;</span>
     </button>
     <div class="border-bottom mb-2" style="border-color:#eee !important;"></div>
-    <div class="collapse" id="{{ cat_id }}">
+    <div class="collapse{% if category != '📝 Notes' and category != '✓ Read' %} show{% endif %}" id="{{ cat_id }}">
       <div class="d-flex flex-column gap-2 mt-1">
         {% for article in articles %}
         {% set is_note = article.content_type == 'Note' %}
@@ -104,21 +104,18 @@
                     <a href="{{ article.url }}" target="_blank" rel="noopener"
                        class="text-decoration-none text-dark">{{ article.title }} <span class="text-muted" style="font-size:.75em;">&#8599;</span></a>
                   {% else %}
-                    <button class="btn btn-link p-0 text-dark fw-semibold text-start text-decoration-none"
-                            style="font-size:1em;" type="button"
-                            data-bs-toggle="collapse" data-bs-target="#{{ art_id }}">{{ article.title }}</button>
+                    {{ article.title }}
                   {% endif %}
                 </div>
-                <div class="collapse" id="{{ art_id }}">
-                  {% if article.summary %}
-                  <p class="text-secondary mb-1 mt-1" style="font-size:.82em; line-height:1.4;">{{ article.summary }}</p>
-                  {% endif %}
-                  <div>
-                    {% for tag in article.tag_list() %}
-                      <span class="badge bg-light text-secondary border me-1" style="font-size:.68em;">{{ tag }}</span>
-                    {% endfor %}
-                  </div>
-                  <!-- Per-article notes -->
+                {% if article.summary %}
+                <p class="text-secondary mb-1" style="font-size:.82em; line-height:1.4;">{{ article.summary }}</p>
+                {% endif %}
+                <div>
+                  {% for tag in article.tag_list() %}
+                    <span class="badge bg-light text-secondary border me-1" style="font-size:.68em;">{{ tag }}</span>
+                  {% endfor %}
+                </div>
+                <!-- Per-article notes -->
                   <div class="mt-2">
                     <button class="btn btn-link p-0 text-muted" style="font-size:.78em; text-decoration:none;"
                             type="button" data-bs-toggle="collapse"
@@ -142,7 +139,6 @@
                       </div>
                     </div>
                   </div>
-                </div>
               </div>
               <div class="d-flex align-items-center gap-2 flex-shrink-0 ms-2">
                 <button class="btn btn-link p-0 toggle-read-btn d-flex align-items-center gap-1"
