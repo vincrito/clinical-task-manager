@@ -29,119 +29,140 @@
 
   {% if grouped_articles %}
   {% for category, articles in grouped_articles %}
-  <div class="mb-4">
-    <h6 class="fw-semibold text-uppercase text-muted mb-2" style="font-size:.75em; letter-spacing:.06em; border-bottom:1px solid #eee; padding-bottom:.4rem;">
-      {{ category }} <span class="fw-normal">({{ articles|length }})</span>
-    </h6>
-    <div class="d-flex flex-column gap-2">
-      {% for article in articles %}
-      {% set is_note = article.content_type == 'Note' %}
-      {% set is_saved = article.id in saved_ids %}
-      {% set is_dismissed = article.id in reacted_ids and not is_saved %}
-      <div class="card border-0 shadow-sm {% if is_saved and not is_note %}bg-light{% endif %}">
-        <div class="card-body py-2 px-3">
-          {% if is_note %}
-          <!-- Freestanding note card -->
-          <div class="d-flex justify-content-between align-items-start gap-2">
-            <div style="flex:1; min-width:0;">
-              <div class="fw-semibold" style="font-size:.92em;">{{ article.title }}</div>
-              <div class="collapse" id="noteBody{{ article.id }}">
-                <p class="text-secondary mt-1 mb-1" style="font-size:.85em; white-space:pre-wrap; line-height:1.5;">{{ article.summary }}</p>
-                {% if article.tag_list() %}
-                <div class="mb-1">
-                  {% for tag in article.tag_list() %}
-                    <span class="badge bg-light text-secondary border me-1" style="font-size:.68em;">{{ tag }}</span>
-                  {% endfor %}
-                </div>
-                {% endif %}
-              </div>
-              <button class="btn btn-link p-0 text-muted" style="font-size:.78em; text-decoration:none;"
-                      type="button" data-bs-toggle="collapse" data-bs-target="#noteBody{{ article.id }}">
-                <span class="note-expand-lbl">&#9656; expand</span>
-              </button>
-            </div>
-            <div class="d-flex align-items-center gap-2 flex-shrink-0 ms-2">
-              <button class="btn btn-link p-0 text-secondary edit-note-trigger"
-                      style="font-size:1em; line-height:1;"
-                      data-aid="{{ article.id }}"
-                      data-title="{{ article.title | e }}"
-                      data-body="{{ article.summary | e }}"
-                      data-tags="{{ article.tags | e }}"
-                      title="Edit note">&#9998;</button>
-              <form method="post" action="{{ url_for('articles.delete_article', aid=article.id) }}"
-                    onsubmit="return confirm('Delete this note?');" class="mb-0">
-                <button class="btn btn-link p-0 text-danger"
-                        style="font-size:1em; line-height:1;" title="Delete note">&#128465;</button>
-              </form>
-            </div>
-          </div>
-          {% else %}
-          <!-- Regular article card -->
-          <div class="d-flex justify-content-between align-items-start gap-3">
-            <div style="flex:1; min-width:0;">
-              {% if article.author %}
-                <span class="text-muted" style="font-size:.78em;">{{ article.author }}</span>
-              {% endif %}
-              <div class="fw-semibold" style="font-size:.92em;">
-                {% if article.pdf_path %}
-                  <a href="{{ url_for('static', filename=article.pdf_path) }}" target="_blank"
-                     class="text-decoration-none text-dark">{{ article.title }} <span class="text-muted" style="font-size:.75em;">PDF &#8599;</span></a>
-                {% elif article.url %}
-                  <a href="{{ article.url }}" target="_blank" rel="noopener"
-                     class="text-decoration-none text-dark">{{ article.title }} <span class="text-muted" style="font-size:.75em;">&#8599;</span></a>
-                {% else %}
-                  {{ article.title }}
-                {% endif %}
-              </div>
-              <p class="text-secondary mb-1" style="font-size:.82em; line-height:1.4;">{{ article.summary }}</p>
-              <div>
-                {% for tag in article.tag_list() %}
-                  <span class="badge bg-light text-secondary border me-1" style="font-size:.68em;">{{ tag }}</span>
-                {% endfor %}
-              </div>
-              <!-- Per-article notes -->
-              <div class="mt-2">
-                <button class="btn btn-link p-0 text-muted" style="font-size:.78em; text-decoration:none;"
-                        type="button" data-bs-toggle="collapse"
-                        data-bs-target="#notes{{ article.id }}">&#128221; Notes</button>
-                <div class="collapse{% if article.notes %} show{% endif %}" id="notes{{ article.id }}">
-                  {% if article.notes %}
-                  <div class="notes-preview mt-1" data-aid="{{ article.id }}"
-                       style="font-size:.82em; color:#555; white-space:pre-wrap; line-height:1.5; padding:.35rem .5rem; background:#f8f9fa; border-radius:4px;">{{ article.notes }}</div>
+  {% set cat_id = "cat_" ~ loop.index %}
+  {% set is_read_section = category == '\u2713 Read' %}
+  <div class="mb-3">
+    <button class="btn btn-link p-0 d-flex align-items-center gap-2 w-100 text-start text-decoration-none"
+            type="button" data-bs-toggle="collapse" data-bs-target="#{{ cat_id }}">
+      <h6 class="fw-semibold text-uppercase text-muted mb-0"
+          style="font-size:.75em; letter-spacing:.06em;">{{ category }} <span class="fw-normal">({{ articles|length }})</span></h6>
+      <span class="text-muted ms-auto" style="font-size:.7em;">&#9660;</span>
+    </button>
+    <div class="border-bottom mb-2" style="border-color:#eee !important;"></div>
+    <div class="collapse" id="{{ cat_id }}">
+      <div class="d-flex flex-column gap-2 mt-1">
+        {% for article in articles %}
+        {% set is_note = article.content_type == 'Note' %}
+        {% set is_saved = article.id in saved_ids %}
+        {% set is_dismissed = article.id in reacted_ids and not is_saved %}
+        {% set art_id = "art_" ~ article.id %}
+        <div class="card border-0 shadow-sm">
+          <div class="card-body py-2 px-3">
+            {% if is_note %}
+            <!-- Freestanding note card -->
+            <div class="d-flex align-items-start gap-2">
+              <div style="flex:1; min-width:0;">
+                <div class="d-flex align-items-baseline gap-2 flex-wrap">
+                  <button class="btn btn-link p-0 text-dark fw-semibold text-start text-decoration-none"
+                          style="font-size:.92em;" type="button"
+                          data-bs-toggle="collapse" data-bs-target="#{{ art_id }}">{{ article.title }}</button>
+                  <span class="text-muted" style="font-size:.72em;">{{ article.created_at.strftime('%b %d, %Y') if article.created_at else '' }}</span>
+                  {% if not article.summary %}{% else %}
+                  <span class="text-secondary note-snippet-{{ article.id }}" style="font-size:.8em; color:#888;">
+                    — {{ article.summary[:80] }}{% if article.summary|length > 80 %}…{% endif %}
+                  </span>
                   {% endif %}
-                  <textarea class="form-control form-control-sm mt-1 article-notes{% if article.notes %} d-none{% endif %}"
-                            data-aid="{{ article.id }}"
-                            rows="3" placeholder="Your thoughts, highlights, key takeaways…"
-                            style="font-size:.82em; resize:vertical;">{{ article.notes or '' }}</textarea>
-                  <div class="d-flex align-items-center gap-2 mt-1">
-                    <button class="btn btn-sm btn-outline-secondary save-notes-btn{% if article.notes %} d-none{% endif %}" data-aid="{{ article.id }}"
-                            style="font-size:.75em; padding:.2rem .55rem;">Save</button>
-                    <button class="btn btn-sm btn-link p-0 text-muted edit-notes-btn{% if not article.notes %} d-none{% endif %}" data-aid="{{ article.id }}"
-                            style="font-size:.75em;">Edit</button>
-                    <span class="notes-saved-msg text-success" data-aid="{{ article.id }}"
-                          style="font-size:.75em; display:none;">&#10003; Saved</span>
+                </div>
+                <div class="collapse" id="{{ art_id }}">
+                  <p class="text-secondary mt-1 mb-1" style="font-size:.85em; white-space:pre-wrap; line-height:1.5;">{{ article.summary }}</p>
+                  {% if article.tag_list() %}
+                  <div class="mb-1">
+                    {% for tag in article.tag_list() %}
+                      <span class="badge bg-light text-secondary border me-1" style="font-size:.68em;">{{ tag }}</span>
+                    {% endfor %}
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="d-flex align-items-center gap-2 flex-shrink-0 ms-2">
+                <button class="btn btn-link p-0 text-secondary edit-note-trigger"
+                        style="font-size:1em; line-height:1;"
+                        data-aid="{{ article.id }}"
+                        data-title="{{ article.title | e }}"
+                        data-body="{{ article.summary | e }}"
+                        data-tags="{{ article.tags | e }}"
+                        title="Edit note">&#9998;</button>
+                <form method="post" action="{{ url_for('articles.delete_article', aid=article.id) }}"
+                      onsubmit="return confirm('Delete this note?');" class="mb-0">
+                  <button class="btn btn-link p-0 text-danger"
+                          style="font-size:1em; line-height:1;" title="Delete note">&#128465;</button>
+                </form>
+              </div>
+            </div>
+            {% else %}
+            <!-- Regular article card -->
+            <div class="d-flex justify-content-between align-items-start gap-3">
+              <div style="flex:1; min-width:0;">
+                {% if article.author %}
+                  <span class="text-muted" style="font-size:.78em;">{{ article.author }}</span>
+                {% endif %}
+                <div class="fw-semibold" style="font-size:.92em;">
+                  {% if article.pdf_path %}
+                    <a href="{{ url_for('static', filename=article.pdf_path) }}" target="_blank"
+                       class="text-decoration-none text-dark">{{ article.title }} <span class="text-muted" style="font-size:.75em;">PDF &#8599;</span></a>
+                  {% elif article.url %}
+                    <a href="{{ article.url }}" target="_blank" rel="noopener"
+                       class="text-decoration-none text-dark">{{ article.title }} <span class="text-muted" style="font-size:.75em;">&#8599;</span></a>
+                  {% else %}
+                    <button class="btn btn-link p-0 text-dark fw-semibold text-start text-decoration-none"
+                            style="font-size:1em;" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#{{ art_id }}">{{ article.title }}</button>
+                  {% endif %}
+                </div>
+                <div class="collapse" id="{{ art_id }}">
+                  {% if article.summary %}
+                  <p class="text-secondary mb-1 mt-1" style="font-size:.82em; line-height:1.4;">{{ article.summary }}</p>
+                  {% endif %}
+                  <div>
+                    {% for tag in article.tag_list() %}
+                      <span class="badge bg-light text-secondary border me-1" style="font-size:.68em;">{{ tag }}</span>
+                    {% endfor %}
+                  </div>
+                  <!-- Per-article notes -->
+                  <div class="mt-2">
+                    <button class="btn btn-link p-0 text-muted" style="font-size:.78em; text-decoration:none;"
+                            type="button" data-bs-toggle="collapse"
+                            data-bs-target="#notes{{ article.id }}">&#128221; Notes</button>
+                    <div class="collapse{% if article.notes %} show{% endif %}" id="notes{{ article.id }}">
+                      {% if article.notes %}
+                      <div class="notes-preview mt-1" data-aid="{{ article.id }}"
+                           style="font-size:.82em; color:#555; white-space:pre-wrap; line-height:1.5; padding:.35rem .5rem; background:#f8f9fa; border-radius:4px;">{{ article.notes }}</div>
+                      {% endif %}
+                      <textarea class="form-control form-control-sm mt-1 article-notes{% if article.notes %} d-none{% endif %}"
+                                data-aid="{{ article.id }}"
+                                rows="3" placeholder="Your thoughts, highlights, key takeaways…"
+                                style="font-size:.82em; resize:vertical;">{{ article.notes or '' }}</textarea>
+                      <div class="d-flex align-items-center gap-2 mt-1">
+                        <button class="btn btn-sm btn-outline-secondary save-notes-btn{% if article.notes %} d-none{% endif %}" data-aid="{{ article.id }}"
+                                style="font-size:.75em; padding:.2rem .55rem;">Save</button>
+                        <button class="btn btn-sm btn-link p-0 text-muted edit-notes-btn{% if not article.notes %} d-none{% endif %}" data-aid="{{ article.id }}"
+                                style="font-size:.75em;">Edit</button>
+                        <span class="notes-saved-msg text-success" data-aid="{{ article.id }}"
+                              style="font-size:.75em; display:none;">&#10003; Saved</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
+              <div class="d-flex align-items-center gap-2 flex-shrink-0 ms-2">
+                <button class="btn btn-link p-0 toggle-read-btn d-flex align-items-center gap-1"
+                        data-aid="{{ article.id }}"
+                        style="color:{{ '#27ae60' if is_saved else '#bbb' }}; text-decoration:none; font-size:.82em; line-height:1;">
+                  <span style="font-size:1em; line-height:1;">{{ '●' if is_saved else '○' }}</span>
+                  <span>read</span>
+                </button>
+                <form method="post" action="{{ url_for('articles.delete_article', aid=article.id) }}"
+                      onsubmit="return confirm('Delete this article?');" class="mb-0">
+                  <button class="btn btn-link p-0 text-danger"
+                          style="font-size:1em; line-height:1;" title="Delete article">&#128465;</button>
+                </form>
+              </div>
             </div>
-            <div class="d-flex align-items-center gap-2 flex-shrink-0 ms-2">
-              <button class="btn btn-link p-0 toggle-read-btn d-flex align-items-center gap-1"
-                      data-aid="{{ article.id }}"
-                      style="color:{{ '#27ae60' if is_saved else '#bbb' }}; text-decoration:none; font-size:.82em; line-height:1;">
-                <span style="font-size:1em; line-height:1;">{{ '●' if is_saved else '○' }}</span>
-                <span>read</span>
-              </button>
-              <form method="post" action="{{ url_for('articles.delete_article', aid=article.id) }}"
-                    onsubmit="return confirm('Delete this article?');" class="mb-0">
-                <button class="btn btn-link p-0 text-danger"
-                        style="font-size:1em; line-height:1;" title="Delete article">&#128465;</button>
-              </form>
-            </div>
+            {% endif %}
           </div>
-          {% endif %}
         </div>
+        {% endfor %}
       </div>
-      {% endfor %}
     </div>
   </div>
   {% endfor %}
