@@ -128,7 +128,7 @@
               <button class="btn btn-link p-0 toggle-read-btn d-flex align-items-center gap-1"
                       data-aid="{{ article.id }}"
                       style="color:{{ '#27ae60' if is_saved else '#bbb' }}; text-decoration:none; font-size:.82em; line-height:1;">
-                <span style="font-size:1em; line-height:1;">{{ '&#9679;' if is_saved else '&#9675;' }}</span>
+                <span style="font-size:1em; line-height:1;">{{ '●' if is_saved else '○' }}</span>
                 <span>read</span>
               </button>
               <form method="post" action="{{ url_for('articles.delete_article', aid=article.id) }}"
