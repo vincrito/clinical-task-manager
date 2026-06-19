@@ -205,6 +205,7 @@ def browse_articles():
         query = query.filter(Article.category == cat)
     all_articles = query.order_by(Article.category.asc(), Article.title.asc()).all()
 
+    # Group by first tag (capitalised); fall back to existing category field for older articles
     from collections import defaultdict
     grouped = defaultdict(list)
     for a in all_articles:
@@ -213,7 +214,8 @@ def browse_articles():
         elif a.id in saved_ids:
             grouped["\u2713 Read"].append(a)
         else:
-            grouped[a.category or "Uncategorized"].append(a)
+            first_tag = a.tag_list()[0].capitalize() if a.tag_list() else (a.category or "Uncategorized")
+            grouped[first_tag].append(a)
     # Notes first, then alphabetical categories, then Read at end
     special = ["\U0001f4dd Notes", "\u2713 Read"]
     sorted_cats = (["\U0001f4dd Notes"] if "\U0001f4dd Notes" in grouped else []) + \
@@ -276,7 +278,8 @@ def create_article():
     author  = request.form.get("author", "").strip()
     tags_list = request.form.getlist("tags")
     tags    = ", ".join(t.strip() for t in tags_list if t.strip())
-    category = request.form.get("category", "").strip()
+    # derive category from first tag so grouping matches what user expects
+    category = tags_list[0].strip().capitalize() if tags_list else "Uncategorized"
 
     pdf_file = request.files.get("pdf")
     pdf_path = None
