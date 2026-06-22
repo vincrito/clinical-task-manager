@@ -52,9 +52,14 @@ def quick_add():
     if not due_date:
         priority = "low"
 
+    max_pos = db.session.query(db.func.max(Task.position)).filter_by(
+        user_id=current_user.id, list_id=lst.id
+    ).scalar()
+    next_pos = (max_pos + 1) if max_pos is not None else 0
+
     t = Task(user_id=current_user.id, list_id=lst.id,
              description=description, due_date=due_date,
-             status="pending", priority=priority)
+             status="pending", priority=priority, position=next_pos)
     db.session.add(t)
     db.session.commit()
     return jsonify(ok=True, task_id=t.id, list_id=lst.id,
@@ -70,6 +75,33 @@ def complete_json(tid: int):
     t.status = "completed"
     db.session.commit()
     return jsonify(ok=True, task_id=tid)
+
+@bp.post("/tasks/<int:tid>/move")
+@login_required
+def move_task(tid: int):
+    direction = request.form.get("direction", "").strip()
+    if direction not in ("up", "down"):
+        return jsonify(ok=False, error="Invalid direction.")
+    t = Task.query.filter_by(id=tid, user_id=current_user.id).first()
+    if not t:
+        return jsonify(ok=False, error="Task not found.")
+    siblings = (Task.query
+                .filter_by(user_id=current_user.id, list_id=t.list_id)
+                .filter(Task.status != "completed")
+                .order_by(Task.position.asc())
+                .all())
+    idx = next((i for i, s in enumerate(siblings) if s.id == tid), None)
+    if idx is None:
+        return jsonify(ok=False, error="Task not found in list.")
+    if direction == "up" and idx > 0:
+        neighbor = siblings[idx - 1]
+        t.position, neighbor.position = neighbor.position, t.position
+        db.session.commit()
+    elif direction == "down" and idx < len(siblings) - 1:
+        neighbor = siblings[idx + 1]
+        t.position, neighbor.position = neighbor.position, t.position
+        db.session.commit()
+    return jsonify(ok=True)
 
 @bp.get("/tasks/<int:tid>/json")
 @login_required

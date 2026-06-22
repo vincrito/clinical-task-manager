@@ -76,14 +76,9 @@ def list_detail(lid: int):
     lst = TaskList.query.filter_by(id=lid, user_id=current_user.id).first_or_404()
     from sqlalchemy import case as _sa_case
     from models.comment import Comment
-    _pri = _sa_case(
-        (Task.priority == "high", 1),
-        (Task.priority == "medium", 2),
-        else_=3
-    )
     all_tasks = (Task.query
              .filter_by(user_id=current_user.id, list_id=lid)
-             .order_by(Task.due_date.asc().nulls_last(), _pri)
+             .order_by(Task.position.asc())
              .all())
     tasks = [t for t in all_tasks if t.status != "completed"]
     completed_tasks = sorted(

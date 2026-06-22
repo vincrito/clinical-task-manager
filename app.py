@@ -32,6 +32,11 @@ def create_app():
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
     # secret used to sign session cookies; read from env or fallback
 
+    from datetime import timedelta
+    app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=30)  # stay logged in for 30 days
+    app.config["REMEMBER_COOKIE_HTTPONLY"] = True
+    app.config["REMEMBER_COOKIE_SECURE"] = os.getenv("FLASK_ENV") == "production"
+
     os.makedirs(app.instance_path, exist_ok=True)
     # ensure instance/ exists (where SQLite DB will live)
 
@@ -93,6 +98,25 @@ def create_app():
                 with db.engine.connect() as conn:
                     conn.execute(text("ALTER TABLE users ADD COLUMN interests VARCHAR(500) NOT NULL DEFAULT ''"))
                     conn.commit()
+            task_cols = {c["name"] for c in insp.get_columns("tasks")}
+            if "position" not in task_cols:
+                with db.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE tasks ADD COLUMN position INTEGER NOT NULL DEFAULT 0"))
+                    conn.commit()
+                # Populate positions: assign sequential order per list, sorted by due_date then id
+                rows = db.session.execute(
+                    text("SELECT id, list_id FROM tasks ORDER BY list_id, due_date ASC NULLS LAST, id ASC")
+                ).fetchall()
+                list_counter = {}
+                for row in rows:
+                    tid, lid = row[0], row[1]
+                    list_counter[lid] = list_counter.get(lid, 0)
+                    db.session.execute(
+                        text("UPDATE tasks SET position = :pos WHERE id = :tid"),
+                        {"pos": list_counter[lid], "tid": tid}
+                    )
+                    list_counter[lid] += 1
+                db.session.commit()
         except Exception:
             pass  # table may not exist yet on first boot; create_all handles it
 

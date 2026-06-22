@@ -16,6 +16,7 @@ class Task(db.Model):                              # SQLAlchemy model → table 
     due_date = db.Column(db.String(10), nullable=True)     # optional due date "YYYY-MM-DD"         # due date (string)
     status = db.Column(db.String(20), nullable=False, default="pending")  # task status
     priority = db.Column(db.String(10), nullable=False, default="medium")  # low / medium / high
+    position = db.Column(db.Integer, nullable=False, default=0)  # display order within list (lower = higher up)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(EASTERN).replace(tzinfo=None))
     updated_at = db.Column(
         db.DateTime,

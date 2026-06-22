@@ -31,6 +31,7 @@
         <th>Due</th>
         <th>Status</th>
         <th></th>
+        <th></th>
       </tr>
     </thead>
     <tbody>
@@ -57,6 +58,10 @@
             <input type="hidden" name="redirect_to" value="{{ url_for('lists.list_detail', lid=lst.id) }}">
             <button class="btn btn-sm btn-link text-danger p-0 px-1" title="Delete">&#128465;</button>
           </form>
+        </td>
+        <td class="text-end text-nowrap" style="width:40px;">
+          <button class="btn btn-sm btn-link text-muted move-btn p-0" data-dir="up" title="Move up" style="line-height:1;">&#9650;</button>
+          <button class="btn btn-sm btn-link text-muted move-btn p-0" data-dir="down" title="Move down" style="line-height:1;">&#9660;</button>
         </td>
       </tr>
       {% else %}
@@ -313,6 +318,28 @@ function addDetailComment(){
     })
     .catch(function(){btn.disabled=false;});
 }
+
+document.addEventListener('click',function(e){
+  var btn=e.target.closest('.move-btn');if(!btn)return;
+  var row=btn.closest('.task-row');var tid=row.dataset.taskId;
+  var dir=btn.dataset.dir;
+  btn.disabled=true;
+  var fd=new FormData();fd.append('direction',dir);
+  fetch('/tasks/'+tid+'/move',{method:'POST',body:fd})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      btn.disabled=false;
+      if(data.ok){
+        var tbody=row.closest('tbody');
+        if(dir==='up'&&row.previousElementSibling){
+          tbody.insertBefore(row,row.previousElementSibling);
+        }else if(dir==='down'&&row.nextElementSibling){
+          tbody.insertBefore(row.nextElementSibling,row);
+        }
+      }
+    })
+    .catch(function(){btn.disabled=false;});
+});
 
 document.addEventListener('click',function(e){
   var btn=e.target.closest('.complete-btn');if(!btn)return;

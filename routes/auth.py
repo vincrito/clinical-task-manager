@@ -20,7 +20,7 @@ def login_post():
         flash("Invalid credentials", "danger")                                   # show error message (Bootstrap red)
         return redirect(url_for("auth.login"))                                   # redirect back to login
 
-    login_user(user)                                                             # log the user in (sets session cookie)
+    login_user(user, remember=True)                                              # log the user in (persistent remember-me cookie)
     flash("Welcome back!", "success")                                            # success message (green)
     return redirect(url_for("main.index"))                                       # go to homepage
 
