@@ -4,6 +4,7 @@ from models import db
 from models.task import Task, ALLOWED_STATUSES, ALLOWED_PRIORITIES
 from models.list import TaskList
 from models.comment import Comment
+from models.recurrence import RecurrenceRule, ALLOWED_FREQUENCIES, generate_due_occurrences
 from sqlalchemy import or_
 import re
 from datetime import datetime
@@ -18,7 +19,6 @@ bp = Blueprint("tasks", __name__)
 def quick_add():
     """JSON endpoint used by the dashboard quick-add modal."""
     description = request.form.get("description", "").strip()
-    due_date_raw = request.form.get("due_date", "").strip()
     list_id = request.form.get("list_id", "").strip()
     priority = request.form.get("priority", "medium").strip()
 
@@ -32,6 +32,42 @@ def quick_add():
     if priority not in ALLOWED_PRIORITIES:
         priority = "medium"
 
+    # --- Recurring path ---
+    recurring = request.form.get("recurring", "").strip()
+    if recurring == "1":
+        frequency = request.form.get("frequency", "weekly").strip()
+        if frequency not in ALLOWED_FREQUENCIES:
+            frequency = "weekly"
+        start_date_raw = request.form.get("start_date", "").strip()
+        if not start_date_raw:
+            return jsonify(ok=False, error="A start date is required for recurring tasks.")
+        start_date = None
+        for fmt in ("%Y-%m-%d", "%m/%d/%y", "%m/%d/%Y"):
+            try:
+                start_date = datetime.strptime(start_date_raw, fmt).strftime("%Y-%m-%d")
+                break
+            except ValueError:
+                pass
+        if not start_date:
+            return jsonify(ok=False, error="Invalid start date.")
+        rule = RecurrenceRule(
+            user_id=current_user.id,
+            list_id=lst.id,
+            description=description,
+            priority=priority,
+            frequency=frequency,
+            start_date=start_date,
+            next_occurrence=start_date,
+            is_active=True,
+        )
+        db.session.add(rule)
+        db.session.commit()
+        generate_due_occurrences(current_user.id)
+        return jsonify(ok=True, recurring=True, list_id=lst.id,
+                       description=description, frequency=frequency)
+
+    # --- Regular (non-recurring) path ---
+    due_date_raw = request.form.get("due_date", "").strip()
     today_eastern = datetime.now(EASTERN).date()
     due_date = None
     if due_date_raw:
@@ -126,6 +162,8 @@ def task_json(tid: int):
             "status": t.status,
             "priority": t.priority,
             "list_id": t.list_id,
+            "recurrence_id": t.recurrence_id,
+            "occurrence_date": t.occurrence_date or "",
         },
         comments=[{
             "body": c.body,
@@ -237,6 +275,7 @@ def export_csv():
 @bp.get("/kanban")
 @login_required
 def kanban():
+    generate_due_occurrences(current_user.id)  # generate any overdue recurring occurrences
     from sqlalchemy import case as _sa_case
     all_lists = TaskList.query.filter_by(user_id=current_user.id).order_by(TaskList.name.asc()).all()
     selected_ids = request.args.getlist("list_ids", type=int) or [l.id for l in all_lists]
@@ -273,6 +312,7 @@ def kanban():
 @bp.get("/tasks")
 @login_required
 def list_tasks():
+    generate_due_occurrences(current_user.id)  # generate any overdue recurring occurrences
     status = request.args.get("status", "").strip()
     q = request.args.get("q", "").strip()
     list_id = request.args.get("list_id", "").strip()
@@ -414,6 +454,48 @@ def create_task():
     if priority not in ALLOWED_PRIORITIES:
         priority = "medium"
 
+    # --- Recurring task path ---
+    recurring = request.form.get("recurring", "").strip()
+    if recurring == "1":
+        frequency = request.form.get("frequency", "weekly").strip()
+        if frequency not in ALLOWED_FREQUENCIES:
+            frequency = "weekly"
+        start_date_raw = request.form.get("start_date", "").strip() or due_date or ""
+        if not start_date_raw:
+            flash("A start date is required for recurring tasks.", "danger")
+            return redirect(url_for("tasks.new_task"))
+        # Normalize start date
+        start_date = None
+        for fmt in ("%Y-%m-%d", "%m/%d/%y", "%m/%d/%Y"):
+            try:
+                start_date = datetime.strptime(start_date_raw, fmt).strftime("%Y-%m-%d")
+                break
+            except ValueError:
+                pass
+        if not start_date:
+            flash("Invalid start date for recurring task.", "danger")
+            return redirect(url_for("tasks.new_task"))
+        rule = RecurrenceRule(
+            user_id=current_user.id,
+            list_id=lst.id,
+            description=description,
+            priority=priority,
+            frequency=frequency,
+            start_date=start_date,
+            next_occurrence=start_date,
+            is_active=True,
+        )
+        db.session.add(rule)
+        db.session.commit()
+        # Generate first occurrence(s) up through today
+        generate_due_occurrences(current_user.id)
+        flash("Recurring task created.", "success")
+        redirect_to = request.form.get("redirect_to", "").strip()
+        if redirect_to and redirect_to.startswith("/") and not redirect_to.startswith("//"):
+            return redirect(redirect_to)
+        return redirect(url_for("tasks.list_tasks"))
+
+    # --- Regular (non-recurring) task path ---
     t = Task(user_id=current_user.id,
              list_id=lst.id,
              description=description,
@@ -564,3 +646,76 @@ def update_task(tid: int):
 
     flash("Task updated.", "success")                     # success message                                              # alert
     return redirect(url_for("tasks.list_tasks"))          # back to list                                                 # redirect
+
+
+# ---------------------------------------------------------------------------
+# Recurrence management routes
+# ---------------------------------------------------------------------------
+
+@bp.get("/recurrences")
+@login_required
+def list_recurrences():
+    """Show all recurrence rules for the current user."""
+    rules = (
+        RecurrenceRule.query
+        .filter_by(user_id=current_user.id)
+        .order_by(RecurrenceRule.is_active.desc(), RecurrenceRule.created_at.desc())
+        .all()
+    )
+    all_user_lists = {
+        l.id: l.name
+        for l in TaskList.query.filter_by(user_id=current_user.id).all()
+    }
+    return render_template(
+        "recurrences_list.html",
+        rules=rules,
+        list_names=all_user_lists,
+    )
+
+
+@bp.post("/recurrences/<int:rid>/deactivate")
+@login_required
+def deactivate_recurrence(rid: int):
+    """Pause a recurrence rule. Historical occurrences are unaffected."""
+    rule = RecurrenceRule.query.filter_by(id=rid, user_id=current_user.id).first()
+    if not rule:
+        flash("Recurrence not found.", "danger")
+        return redirect(url_for("tasks.list_recurrences"))
+    rule.is_active = False
+    db.session.commit()
+    flash("Recurrence paused. Existing occurrences are unchanged.", "success")
+    return redirect(url_for("tasks.list_recurrences"))
+
+
+@bp.post("/recurrences/<int:rid>/activate")
+@login_required
+def activate_recurrence(rid: int):
+    """Resume a previously paused recurrence rule."""
+    rule = RecurrenceRule.query.filter_by(id=rid, user_id=current_user.id).first()
+    if not rule:
+        flash("Recurrence not found.", "danger")
+        return redirect(url_for("tasks.list_recurrences"))
+    rule.is_active = True
+    db.session.commit()
+    generate_due_occurrences(current_user.id)
+    flash("Recurrence resumed.", "success")
+    return redirect(url_for("tasks.list_recurrences"))
+
+
+@bp.post("/recurrences/<int:rid>/delete")
+@login_required
+def delete_recurrence(rid: int):
+    """Delete a recurrence rule. Historical task occurrences are kept (recurrence_id set to NULL)."""
+    rule = RecurrenceRule.query.filter_by(id=rid, user_id=current_user.id).first()
+    if not rule:
+        flash("Recurrence not found.", "danger")
+        return redirect(url_for("tasks.list_recurrences"))
+    # Detach existing occurrences so they survive as standalone tasks
+    Task.query.filter_by(recurrence_id=rule.id).update(
+        {"recurrence_id": None, "occurrence_date": None},
+        synchronize_session=False,
+    )
+    db.session.delete(rule)
+    db.session.commit()
+    flash("Recurrence deleted. Past occurrences are kept as regular tasks.", "success")
+    return redirect(url_for("tasks.list_recurrences"))

@@ -235,7 +235,14 @@
                    autocapitalize="sentences" autocorrect="on" spellcheck="true">
           </div>
           <div class="row g-2">
-            <div class="col-6">
+            <div class="col-12">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="qaRecurring">
+                <label class="form-check-label small" for="qaRecurring">Recurring task</label>
+              </div>
+            </div>
+            <!-- Non-recurring fields -->
+            <div id="qaNonRecurring" class="col-6">
               <label class="form-label">Due date</label>
               <input id="quickAddDue" type="date" class="form-control">
             </div>
@@ -246,6 +253,24 @@
                 <option value="medium" selected>Medium</option>
                 <option value="high">High</option>
               </select>
+            </div>
+            <!-- Recurring fields -->
+            <div id="qaRecurringFields" style="display:none;" class="col-12">
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="form-label">Frequency</label>
+                  <select id="qaFrequency" class="form-select">
+                    <option value="daily">Daily</option>
+                    <option value="weekly" selected>Weekly</option>
+                    <option value="biweekly">Every 2 weeks</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </div>
+                <div class="col-6">
+                  <label class="form-label">Starting</label>
+                  <input id="qaStartDate" type="date" class="form-control">
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -393,11 +418,22 @@ function bumpCount(sectionId, countId, delta) {
     document.getElementById('quickAddDesc').value = '';
     document.getElementById('quickAddDue').value = '';
     document.getElementById('quickAddPriority').value = 'medium';
+    document.getElementById('qaRecurring').checked = false;
+    document.getElementById('qaFrequency').value = 'weekly';
+    document.getElementById('qaStartDate').value = '';
     document.getElementById('quickAddComment').value = '';
     document.getElementById('quickAddCommentFeedback').style.display = 'none';
+    qaToggleRecurring();
     _qaTaskId = null;
   }
   document.getElementById('quickAddModal').addEventListener('hidden.bs.modal', resetQuickAdd);
+
+  function qaToggleRecurring() {
+    var rec = document.getElementById('qaRecurring').checked;
+    document.getElementById('qaNonRecurring').style.display = rec ? 'none' : '';
+    document.getElementById('qaRecurringFields').style.display = rec ? '' : 'none';
+  }
+  document.getElementById('qaRecurring').addEventListener('change', qaToggleRecurring);
 
   document.querySelectorAll('.quick-add-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
@@ -411,51 +447,69 @@ function bumpCount(sectionId, countId, delta) {
     var desc = document.getElementById('quickAddDesc').value.trim();
     var due  = document.getElementById('quickAddDue').value;
     var pri  = document.getElementById('quickAddPriority').value;
+    var rec  = document.getElementById('qaRecurring').checked;
     var errEl = document.getElementById('quickAddError');
     if (!desc) { errEl.textContent='Description is required.'; errEl.style.display=''; return; }
+    if (rec && !document.getElementById('qaStartDate').value) {
+      errEl.textContent='Please set a start date.'; errEl.style.display=''; return;
+    }
 
     var btn = this;
-    btn.disabled = true; btn.textContent = 'Saving\u2026';
+    btn.disabled = true; btn.textContent = 'Saving…';
 
     var fd = new FormData();
     fd.append('list_id', currentListId);
     fd.append('description', desc);
-    fd.append('due_date', due);
     fd.append('priority', pri);
+    if (rec) {
+      fd.append('recurring', '1');
+      fd.append('frequency', document.getElementById('qaFrequency').value);
+      fd.append('start_date', document.getElementById('qaStartDate').value);
+    } else {
+      fd.append('due_date', due);
+    }
 
     fetch('{{ url_for("tasks.quick_add") }}', { method:'POST', body:fd })
       .then(function(r){ return r.json(); })
       .then(function(data) {
         btn.disabled = false; btn.textContent = 'Create';
         if (data.ok) {
-          _qaTaskId = data.task_id;
-          // Show comment step
+          _qaTaskId = data.task_id || null;
+          // Show step 2
           document.getElementById('quickAddStep1').style.display = 'none';
           document.getElementById('quickAddStep2').style.display = '';
           document.getElementById('quickAddSubmit').style.display = 'none';
-          document.getElementById('quickAddAddCommentBtn').style.display = '';
           document.getElementById('quickAddDoneBtn').style.display = '';
-          // update list panel pending count
-          document.querySelectorAll('.quick-add-btn[data-list-id="'+data.list_id+'"]').forEach(function(b) {
-            var card = b.closest('.card-body');
-            if (!card) return;
-            card.querySelectorAll('.d-flex.gap-3 span').forEach(function(s) {
-              if (s.textContent.includes('pending')) {
-                var m = s.textContent.match(/(\d+)/);
-                if (m) s.textContent = '\u25cf '+(parseInt(m[1])+1)+' pending';
-              }
+          if (data.recurring) {
+            // Recurring task created — skip comment step, show simple success
+            document.getElementById('quickAddAddCommentBtn').style.display = 'none';
+            document.getElementById('quickAddComment').closest('.mb-2').style.display = 'none';
+          } else {
+            document.getElementById('quickAddAddCommentBtn').style.display = '';
+            var commentParent = document.getElementById('quickAddComment').closest('.mb-2');
+            if (commentParent) commentParent.style.display = '';
+            // update list panel pending count
+            document.querySelectorAll('.quick-add-btn[data-list-id="'+data.list_id+'"]').forEach(function(b) {
+              var card = b.closest('.card-body');
+              if (!card) return;
+              card.querySelectorAll('.d-flex.gap-3 span').forEach(function(s) {
+                if (s.textContent.includes('pending')) {
+                  var m = s.textContent.match(/(\d+)/);
+                  if (m) s.textContent = '\u25cf '+(parseInt(m[1])+1)+' pending';
+                }
+              });
             });
-          });
-          // inject row into the correct section
-          if (data.due_date === TODAY) {
-            document.getElementById('dueTodayUl').appendChild(buildTaskRow(data, false));
-            bumpCount('dueTodaySection','dueTodayCount', 1);
-          } else if (data.due_date > TODAY && data.due_date <= WEEK_END) {
-            document.getElementById('dueWeekUl').appendChild(buildTaskRow(data, true));
-            bumpCount('dueWeekSection','dueWeekCount', 1);
-          } else if (!data.due_date) {
-            document.getElementById('openTasksNewUl').appendChild(buildTaskRow(data, false));
-            bumpCount('openTasksSection','openTasksCount', 1);
+            // inject row into the correct section
+            if (data.due_date === TODAY) {
+              document.getElementById('dueTodayUl').appendChild(buildTaskRow(data, false));
+              bumpCount('dueTodaySection','dueTodayCount', 1);
+            } else if (data.due_date > TODAY && data.due_date <= WEEK_END) {
+              document.getElementById('dueWeekUl').appendChild(buildTaskRow(data, true));
+              bumpCount('dueWeekSection','dueWeekCount', 1);
+            } else if (!data.due_date) {
+              document.getElementById('openTasksNewUl').appendChild(buildTaskRow(data, false));
+              bumpCount('openTasksSection','openTasksCount', 1);
+            }
           }
         } else {
           errEl.textContent = data.error || 'Something went wrong.';

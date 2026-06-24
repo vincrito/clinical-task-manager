@@ -39,7 +39,8 @@
       <tr class="task-row" data-task-id="{{ t.id }}" data-list-id="{{ lst.id }}">
         <td>
           <span class="task-name" style="cursor:pointer; text-decoration:underline dotted #bbb;"
-                onclick="openTaskDetail({{ t.id }})">{{ t.description }}</span>
+                onclick="openTaskDetail({{ t.id }})">{% if t.occurrence_date %}{{ t.description }} &mdash; <span style="color:#666;">{{ t.occurrence_date | fmt_occurrence }}</span>{% else %}{{ t.description }}{% endif %}</span>
+        {% if t.recurrence_id %}<span title="Recurring" style="color:#aaa;font-size:.75em;margin-left:2px;">&#8635;</span>{% endif %}
         {% if comment_counts.get(t.id, 0) > 0 %}<span class="comment-bubble" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-placement="top" data-bs-content="{{ comment_latest.get(t.id,'') | replace('"','&quot;') }}" tabindex="0" style="color:#aaa;font-size:.78em;cursor:default;margin-left:3px;" onclick="openTaskDetail({{ t.id }})" title="has comments">&#128172;</span>{% endif %}
         </td>
         <td>
@@ -140,7 +141,14 @@
           <input id="newTaskDesc" class="form-control" required autocapitalize="sentences" autocorrect="on" spellcheck="true">
         </div>
         <div class="row g-2">
-          <div class="col-6">
+          <div class="col-12">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="ldRecurring">
+              <label class="form-check-label small" for="ldRecurring">Recurring task</label>
+            </div>
+          </div>
+          <!-- Non-recurring fields -->
+          <div id="ldNonRecurring" class="col-6">
             <label class="form-label">Due date</label>
             <input id="newTaskDue" type="date" class="form-control">
           </div>
@@ -151,6 +159,24 @@
               <option value="medium">Medium</option>
               <option value="high">High</option>
             </select>
+          </div>
+          <!-- Recurring fields -->
+          <div id="ldRecurringFields" style="display:none;" class="col-12">
+            <div class="row g-2">
+              <div class="col-6">
+                <label class="form-label">Frequency</label>
+                <select id="ldFrequency" class="form-select">
+                  <option value="daily">Daily</option>
+                  <option value="weekly" selected>Weekly</option>
+                  <option value="biweekly">Every 2 weeks</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label">Starting</label>
+                <input id="ldStartDate" type="date" class="form-control">
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -173,6 +199,12 @@
       <div class="modal-body">
         <div id="detailError" class="alert alert-danger py-1 px-2 small mb-2" style="display:none;"></div>
         <div class="row g-3 mb-3">
+          <div id="detailOccurrence" class="col-12" style="display:none;">
+            <div class="alert alert-info py-1 px-2 small mb-0">
+              &#8635; Recurring occurrence &mdash; <span id="detailOccurrenceDate"></span>
+              &nbsp;<a href="{{ url_for('tasks.list_recurrences') }}" class="small">Manage recurrence</a>
+            </div>
+          </div>
           <div class="col-12">
             <label class="form-label fw-semibold">Description</label>
             <textarea id="detailDesc" class="form-control" rows="2" autocapitalize="sentences" autocorrect="on" spellcheck="true"></textarea>
@@ -232,6 +264,13 @@ function openTaskDetail(tid){
     .then(function(data){
       if(!data.ok)return;
       var t=data.task;
+      var occDiv=document.getElementById('detailOccurrence');
+      if(t.occurrence_date){
+        occDiv.style.display='';
+        document.getElementById('detailOccurrenceDate').textContent=t.occurrence_date;
+      }else{
+        occDiv.style.display='none';
+      }
       document.getElementById('detailDesc').value=t.description;
       document.getElementById('detailDue').value=t.due_date||'';
       document.getElementById('detailPriority').value=t.priority;
@@ -362,21 +401,42 @@ document.getElementById('newTaskModal').addEventListener('show.bs.modal', functi
   document.getElementById('newTaskDue').value = '';
   document.getElementById('newTaskPriority').value = 'low';
   document.getElementById('newTaskError').style.display = 'none';
+  document.getElementById('ldRecurring').checked = false;
+  document.getElementById('ldFrequency').value = 'weekly';
+  document.getElementById('ldStartDate').value = '';
+  ldToggleRecurring();
 });
+
+function ldToggleRecurring() {
+  var rec = document.getElementById('ldRecurring').checked;
+  document.getElementById('ldNonRecurring').style.display = rec ? 'none' : '';
+  document.getElementById('ldRecurringFields').style.display = rec ? '' : 'none';
+}
+document.getElementById('ldRecurring').addEventListener('change', ldToggleRecurring);
 
 document.getElementById('newTaskSaveBtn').addEventListener('click', function() {
   var desc = document.getElementById('newTaskDesc').value.trim();
   var due  = document.getElementById('newTaskDue').value;
   var pri  = document.getElementById('newTaskPriority').value;
+  var rec  = document.getElementById('ldRecurring').checked;
   var errEl = document.getElementById('newTaskError');
   if (!desc) { errEl.textContent = 'Description is required.'; errEl.style.display = ''; return; }
+  if (rec && !document.getElementById('ldStartDate').value) {
+    errEl.textContent = 'Please set a start date.'; errEl.style.display = ''; return;
+  }
   errEl.style.display = 'none';
   var btn = this; btn.disabled = true;
   var fd = new FormData();
   fd.append('description', desc);
-  fd.append('due_date', due);
   fd.append('priority', pri);
   fd.append('list_id', String(CURRENT_LIST_ID));
+  if (rec) {
+    fd.append('recurring', '1');
+    fd.append('frequency', document.getElementById('ldFrequency').value);
+    fd.append('start_date', document.getElementById('ldStartDate').value);
+  } else {
+    fd.append('due_date', due);
+  }
   fetch('/tasks/quick-add', {method: 'POST', body: fd})
     .then(function(r) { return r.json(); })
     .then(function(data) {

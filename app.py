@@ -7,7 +7,7 @@ from datetime import datetime                         # used by the date formatt
 
 login_manager = LoginManager()                           # create a LoginManager instance
 
-def create_app():
+def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True) 
     # create the Flask app; use instance/ for private files like the SQLite DB
 
@@ -28,6 +28,15 @@ def create_app():
             "completed": "Completed"
         }
         return mapping.get(status, status)               # return mapped label, fallback raw
+
+    @app.template_filter("fmt_occurrence")               # formats occurrence date for display
+    def _fmt_occurrence(date_str):                       # takes a YYYY-MM-DD string (or None)
+        if not date_str:                                 # guard
+            return ""
+        try:
+            return datetime.strptime(date_str, "%Y-%m-%d").strftime("%b %-d, %Y")
+        except Exception:
+            return date_str
 
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
     # secret used to sign session cookies; read from env or fallback
@@ -51,6 +60,10 @@ def create_app():
 
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     # turn off unneeded SQLAlchemy event system
+
+    # Allow test_config to override any setting (must happen before db.init_app)
+    if test_config:
+        app.config.update(test_config)
 
     db.init_app(app)                                     # attach SQLAlchemy to this app
     bcrypt.init_app(app)                                 # attach Bcrypt (needed for password hashing)
@@ -77,6 +90,7 @@ def create_app():
     from models.task import Task
     from models.comment import Comment
     from models.article import Article, ArticleReaction
+    from models.recurrence import RecurrenceRule
 
     # Run lightweight column migrations so they apply on PythonAnywhere too
     with app.app_context():
@@ -117,6 +131,23 @@ def create_app():
                     )
                     list_counter[lid] += 1
                 db.session.commit()
+            # Recurring-task columns (added in recurrence feature)
+            if "recurrence_id" not in task_cols:
+                with db.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE tasks ADD COLUMN recurrence_id INTEGER REFERENCES recurrence_rules(id) ON DELETE SET NULL"))
+                    conn.commit()
+            if "occurrence_date" not in task_cols:
+                with db.engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE tasks ADD COLUMN occurrence_date VARCHAR(10)"))
+                    conn.commit()
+            # Unique index to prevent duplicate occurrences (safe to run multiple times)
+            with db.engine.connect() as conn:
+                conn.execute(text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_task_recurrence_occurrence "
+                    "ON tasks (recurrence_id, occurrence_date) "
+                    "WHERE recurrence_id IS NOT NULL"
+                ))
+                conn.commit()
         except Exception:
             pass  # table may not exist yet on first boot; create_all handles it
 

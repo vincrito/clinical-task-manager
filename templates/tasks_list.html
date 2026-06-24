@@ -5,6 +5,7 @@
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h2 class="mb-0" style="font-size:1.4em; font-weight:600; color:#2c3e50;">All Tasks</h2>
     <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('tasks.list_recurrences') }}">&#8635; Recurring</a>
       <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('tasks.export_csv') }}">Export CSV</a>
       <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#newTaskModal">+ New Task</button>
     </div>
@@ -56,7 +57,8 @@
         </td>
         <td>
           <span class="task-name" style="cursor:pointer; text-decoration:underline dotted #bbb;"
-                onclick="openTaskDetail({{ t.id }})">{{ t.description }}</span>
+                onclick="openTaskDetail({{ t.id }})">{% if t.occurrence_date %}{{ t.description }} &mdash; <span style="color:#666;">{{ t.occurrence_date | fmt_occurrence }}</span>{% else %}{{ t.description }}{% endif %}</span>
+        {% if t.recurrence_id %}<span title="Recurring" style="color:#aaa;font-size:.75em;margin-left:2px;">&#8635;</span>{% endif %}
         {% if comment_counts.get(t.id, 0) > 0 %}<span class="comment-bubble" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-placement="top" data-bs-content="{{ comment_latest.get(t.id,'') | replace('"','&quot;') }}" tabindex="0" style="color:#aaa;font-size:.78em;cursor:default;margin-left:3px;" onclick="openTaskDetail({{ t.id }})" title="has comments">&#128172;</span>{% endif %}
         </td>
         <td>
@@ -114,7 +116,7 @@
               <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:{{ list_colors.get(t.list_id,'#ccc') }};vertical-align:middle;opacity:.5;"></span>
             </td>
             <td><span class="task-name" style="cursor:pointer; text-decoration:line-through; color:#aaa;"
-                  onclick="openTaskDetail({{ t.id }})">{{ t.description }}</span></td>
+                  onclick="openTaskDetail({{ t.id }})">{% if t.occurrence_date %}{{ t.description }} &mdash; {{ t.occurrence_date | fmt_occurrence }}{% else %}{{ t.description }}{% endif %}</span></td>
             <td>
               {% if t.priority == 'high' %}<span class="badge text-bg-danger" style="opacity:.6;">High</span>
               {% elif t.priority == 'low' %}<span class="badge text-bg-secondary" style="opacity:.6;">Low</span>
@@ -149,6 +151,12 @@
       <div class="modal-body">
         <div id="detailError" class="alert alert-danger py-1 px-2 small mb-2" style="display:none;"></div>
         <div class="row g-3 mb-3">
+          <div id="detailOccurrence" class="col-12" style="display:none;">
+            <div class="alert alert-info py-1 px-2 small mb-0">
+              &#8635; Recurring occurrence &mdash; <span id="detailOccurrenceDate"></span>
+              &nbsp;<a id="detailRecurrenceLink" href="{{ url_for('tasks.list_recurrences') }}" class="small">Manage recurrence</a>
+            </div>
+          </div>
           <div class="col-12">
             <label class="form-label fw-semibold">Description</label>
             <textarea id="detailDesc" class="form-control" rows="2" autocapitalize="sentences" autocorrect="on" spellcheck="true"></textarea>
@@ -206,6 +214,14 @@ function openTaskDetail(tid){
     .then(function(data){
       if(!data.ok)return;
       var t=data.task;
+      // Show occurrence banner for recurring task occurrences
+      var occDiv=document.getElementById('detailOccurrence');
+      if(t.occurrence_date){
+        occDiv.style.display='';
+        document.getElementById('detailOccurrenceDate').textContent=t.occurrence_date;
+      }else{
+        occDiv.style.display='none';
+      }
       document.getElementById('detailDesc').value=t.description;
       document.getElementById('detailDue').value=t.due_date||'';
       document.getElementById('detailPriority').value=t.priority;
@@ -332,7 +348,14 @@ document.querySelectorAll('[data-bs-toggle="popover"]').forEach(function(el){new
                 {% endfor %}
               </select>
             </div>
-            <div class="col-6">
+            <div class="col-12">
+              <div class="form-check mt-1">
+                <input class="form-check-input" type="checkbox" id="ntRecurring">
+                <label class="form-check-label small" for="ntRecurring">Recurring task</label>
+              </div>
+            </div>
+            <!-- Non-recurring fields -->
+            <div id="ntNonRecurring" class="col-6">
               <label class="form-label">Due date</label>
               <input id="ntDue" type="date" class="form-control">
             </div>
@@ -344,11 +367,29 @@ document.querySelectorAll('[data-bs-toggle="popover"]').forEach(function(el){new
                 <option value="high">High</option>
               </select>
             </div>
+            <!-- Recurring fields (hidden by default) -->
+            <div id="ntRecurringFields" style="display:none;" class="col-12">
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="form-label">Frequency</label>
+                  <select id="ntFrequency" class="form-select">
+                    <option value="daily">Daily</option>
+                    <option value="weekly" selected>Weekly</option>
+                    <option value="biweekly">Every 2 weeks</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </div>
+                <div class="col-6">
+                  <label class="form-label">Starting</label>
+                  <input id="ntStartDate" type="date" class="form-control">
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         <div id="ntStep2" style="display:none;">
-          <div class="alert alert-success py-1 px-2 small mb-3">&#10003; Task created!</div>
-          <div class="mb-2">
+          <div id="ntStep2Msg" class="alert alert-success py-1 px-2 small mb-3">&#10003; Task created!</div>
+          <div id="ntCommentSection" class="mb-2">
             <label class="form-label">Add a comment <span class="text-muted fw-normal">(optional)</span></label>
             <input id="ntComment" class="form-control" placeholder="Notes, context, links…"
                    autocapitalize="sentences" autocorrect="on" spellcheck="true">
@@ -368,6 +409,15 @@ document.querySelectorAll('[data-bs-toggle="popover"]').forEach(function(el){new
 <script>
 (function() {
   var _ntId = null;
+  var _ntRecurring = false;
+
+  function ntToggleRecurring() {
+    _ntRecurring = document.getElementById('ntRecurring').checked;
+    document.getElementById('ntNonRecurring').style.display = _ntRecurring ? 'none' : '';
+    document.getElementById('ntRecurringFields').style.display = _ntRecurring ? '' : 'none';
+  }
+  document.getElementById('ntRecurring').addEventListener('change', ntToggleRecurring);
+
   function resetNt() {
     document.getElementById('ntStep1').style.display = '';
     document.getElementById('ntStep2').style.display = 'none';
@@ -378,35 +428,58 @@ document.querySelectorAll('[data-bs-toggle="popover"]').forEach(function(el){new
     document.getElementById('ntDesc').value = '';
     document.getElementById('ntDue').value = '';
     document.getElementById('ntPriority').value = 'low';
+    document.getElementById('ntRecurring').checked = false;
+    document.getElementById('ntFrequency').value = 'weekly';
+    document.getElementById('ntStartDate').value = '';
     document.getElementById('ntComment').value = '';
     document.getElementById('ntCommentFeedback').style.display = 'none';
+    ntToggleRecurring();
     _ntId = null;
+    _ntRecurring = false;
   }
   document.getElementById('newTaskModal').addEventListener('hidden.bs.modal', resetNt);
   document.getElementById('ntSubmit').addEventListener('click', function() {
     var desc = document.getElementById('ntDesc').value.trim();
     var listId = document.getElementById('ntList').value;
-    var due = document.getElementById('ntDue').value;
     var pri = document.getElementById('ntPriority').value;
     var errEl = document.getElementById('ntError');
     if (!desc) { errEl.textContent = 'Description is required.'; errEl.style.display = ''; return; }
     if (!listId) { errEl.textContent = 'Please select a list.'; errEl.style.display = ''; return; }
+    if (_ntRecurring && !document.getElementById('ntStartDate').value) {
+      errEl.textContent = 'Please set a start date.'; errEl.style.display = ''; return;
+    }
     errEl.style.display = 'none';
     var btn = this; btn.disabled = true; btn.textContent = 'Saving\u2026';
     var fd = new FormData();
-    fd.append('list_id', listId); fd.append('description', desc);
-    fd.append('due_date', due); fd.append('priority', pri);
+    fd.append('list_id', listId);
+    fd.append('description', desc);
+    fd.append('priority', pri);
+    if (_ntRecurring) {
+      fd.append('recurring', '1');
+      fd.append('frequency', document.getElementById('ntFrequency').value);
+      fd.append('start_date', document.getElementById('ntStartDate').value);
+    } else {
+      fd.append('due_date', document.getElementById('ntDue').value);
+    }
     fetch('/tasks/quick-add', {method:'POST', body:fd})
       .then(function(r){ return r.json(); })
       .then(function(data) {
         btn.disabled = false; btn.textContent = 'Create';
         if (data.ok) {
-          _ntId = data.task_id;
+          _ntId = data.task_id || null;
           document.getElementById('ntStep1').style.display = 'none';
           document.getElementById('ntStep2').style.display = '';
           document.getElementById('ntSubmit').style.display = 'none';
-          document.getElementById('ntCommentBtn').style.display = '';
           document.getElementById('ntDoneBtn').style.display = '';
+          if (data.recurring) {
+            document.getElementById('ntStep2Msg').textContent = '\u2713 Recurring task created!';
+            document.getElementById('ntCommentSection').style.display = 'none';
+            document.getElementById('ntCommentBtn').style.display = 'none';
+          } else {
+            document.getElementById('ntStep2Msg').textContent = '\u2713 Task created!';
+            document.getElementById('ntCommentSection').style.display = '';
+            document.getElementById('ntCommentBtn').style.display = '';
+          }
         } else {
           errEl.textContent = data.error || 'Something went wrong.';
           errEl.style.display = '';
@@ -416,7 +489,7 @@ document.querySelectorAll('[data-bs-toggle="popover"]').forEach(function(el){new
   });
   document.getElementById('ntCommentBtn').addEventListener('click', function() {
     var body = document.getElementById('ntComment').value.trim();
-    if (!body) return;
+    if (!body || !_ntId) return;
     var btn = this; btn.disabled = true;
     var fd = new FormData(); fd.append('body', body);
     fetch('/tasks/' + _ntId + '/comment-json', {method:'POST', body:fd})

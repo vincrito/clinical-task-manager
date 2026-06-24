@@ -17,6 +17,13 @@ class Task(db.Model):                              # SQLAlchemy model → table 
     status = db.Column(db.String(20), nullable=False, default="pending")  # task status
     priority = db.Column(db.String(10), nullable=False, default="medium")  # low / medium / high
     position = db.Column(db.Integer, nullable=False, default=0)  # display order within list (lower = higher up)
+    # Recurrence support — both nullable; only set for recurring-task occurrences
+    recurrence_id = db.Column(
+        db.Integer,
+        db.ForeignKey("recurrence_rules.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    occurrence_date = db.Column(db.String(10), nullable=True)  # YYYY-MM-DD; the scheduled recurrence date
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(EASTERN).replace(tzinfo=None))
     updated_at = db.Column(
         db.DateTime,
@@ -28,6 +35,11 @@ class Task(db.Model):                              # SQLAlchemy model → table 
     __table_args__ = (                             # extra DB hints                                 # table options
         db.Index("ix_tasks_user_due", "user_id", "due_date"),
         db.Index("ix_tasks_list", "list_id"),
+        # Prevents duplicate occurrences for the same rule+date (idempotency safeguard)
+        db.UniqueConstraint(
+            "recurrence_id", "occurrence_date",
+            name="uq_task_recurrence_occurrence",
+        ),
     )
 
     def __repr__(self):                            # debug-friendly repr                             # repr

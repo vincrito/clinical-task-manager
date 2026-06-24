@@ -30,9 +30,11 @@ def index():
         from models.task import Task, ALLOWED_STATUSES
         from models.list import TaskList
         from models import db
+        from models.recurrence import generate_due_occurrences
         from sqlalchemy import func, case
 
         uid = current_user.id
+        generate_due_occurrences(uid)  # generate any overdue recurring occurrences
 
         priority_order = case(
             (Task.priority == "high", 1),
